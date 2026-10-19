@@ -1,10 +1,10 @@
 /**
- * config.js — 全局配置常量
- * 包含：Agent 定义、状态枚举、场景尺寸、性能参数
- * （V1 版本：仅保留 3 个基础 Agent，不做自定义新增 Agent）
+ * config.js — 全局配置常量（V1）
+ * 包含：状态枚举、Agent 槽位与配色、场景尺寸、玩家参数、LLM 提供方
+ * 说明：Agent 为动态创建（最多10个），不再写死固定名单。
  */
 
-/** Agent 的 4 种基础状态（V1新增：状态机） */
+/** Agent 的 4 种基础状态（V1：空闲/思考/执行任务/对话） */
 export const AgentState = Object.freeze({
   IDLE: 'idle',           // 空闲
   THINKING: 'thinking',   // 思考
@@ -14,50 +14,37 @@ export const AgentState = Object.freeze({
 
 /** 状态对应的中文名与配色（与 CSS 中 .state-* 保持一致） */
 export const StateMeta = Object.freeze({
-  idle:     { label: '空闲',     color: 0x64748b, css: 'state-idle' },
-  thinking: { label: '思考中',   color: 0xfbbf24, css: 'state-thinking' },
-  executing:{ label: '执行任务', color: 0x4f8ff7, css: 'state-executing' },
-  talking:  { label: '对话中',   color: 0xa78bfa, css: 'state-talking' }
+  idle:      { label: '空闲',     color: 0x94a3b8, css: 'state-idle' },
+  thinking:  { label: '思考中',   color: 0xfbbf24, css: 'state-thinking' },
+  executing: { label: '执行任务', color: 0x4f8ff7, css: 'state-executing' },
+  talking:   { label: '对话中',   color: 0xa78bfa, css: 'state-talking' }
 });
 
-/** 3 个基础 Agent 定义（原有功能） */
-export const AGENTS = Object.freeze([
-  Object.freeze({
-    id: 'planner',
-    name: '规划Agent',
-    role: '项目规划 · 任务拆解',
-    short: '规划',
-    color: 0x4f8ff7,            // 3D 主体颜色（蓝）
-    cssColor: '#4f8ff7',
-    initial: '规',
-    position: { x: -4.5, z: -4.0 },  // 位于房间左后侧工位
-    facing: Math.PI * 0.25,
-    deskIndex: 0
-  }),
-  Object.freeze({
-    id: 'coder',
-    name: '编码Agent',
-    role: '编码实现 · 代码修改',
-    short: '编码',
-    color: 0x34d399,            // 3D 主体颜色（绿）
-    cssColor: '#34d399',
-    initial: '码',
-    position: { x: 0, z: -4.6 },    // 位于房间中后侧工位
-    facing: 0,
-    deskIndex: 1
-  }),
-  Object.freeze({
-    id: 'artist',
-    name: '创作Agent',
-    role: '内容创作 · 文案设计',
-    short: '创作',
-    color: 0xfbbf24,            // 3D 主体颜色（琥珀）
-    cssColor: '#fbbf24',
-    initial: '创',
-    position: { x: 4.5, z: -4.0 },  // 位于房间右后侧工位
-    facing: -Math.PI * 0.25,
-    deskIndex: 2
-  })
+/** Agent 最多数量（V1 计划：最多 10 个） */
+export const MAX_AGENTS = 10;
+
+/** 10 个 Agent 槽位（与场景中的 7 个工位 + 会议区 3 个站位一一对应） */
+export const AGENT_SLOTS = Object.freeze([
+  // —— 后墙工位排（面向房间内）——
+  { x: -4.5, z: -5.6, yaw: Math.PI,         label: '后墙工位 1' },
+  { x: 0,    z: -5.6, yaw: Math.PI,         label: '后墙工位 2' },
+  { x: 4.5,  z: -5.6, yaw: Math.PI,         label: '后墙工位 3' },
+  // —— 左墙工位（面向右）——
+  { x: -8.7, z: -2.5, yaw: -Math.PI / 2,    label: '左墙工位 1' },
+  { x: -8.7, z: 2.5,  yaw: -Math.PI / 2,    label: '左墙工位 2' },
+  // —— 右墙工位（面向左）——
+  { x: 8.7,  z: -2.5, yaw: Math.PI / 2,     label: '右墙工位 1' },
+  { x: 8.7,  z: 2.5,  yaw: Math.PI / 2,     label: '右墙工位 2' },
+  // —— 会议区站位（面向会议桌）——
+  { x: -2.4, z: 3.4,  yaw: Math.PI * 0.75,  label: '会议区站位 1' },
+  { x: 2.4,  z: 3.4,  yaw: -Math.PI * 0.75, label: '会议区站位 2' },
+  { x: 0,    z: 5.2,  yaw: Math.PI,         label: '会议区站位 3' }
+]);
+
+/** 10 个 Agent 的低饱和度配色（避免霓虹感，轮流分配） */
+export const AGENT_COLORS = Object.freeze([
+  0x4f8ff7, 0x34d399, 0xfbbf24, 0xa78bfa, 0xf87171,
+  0x22d3ee, 0xfb923c, 0xe879f9, 0x94a3b8, 0xfacc15
 ]);
 
 /** 场景尺寸（低多边形办公室） */
@@ -66,7 +53,7 @@ export const OFFICE = Object.freeze({
   depth: 18,      // 房间深（Z 方向）
   wallHeight: 4,  // 墙高
   fogColor: 0x0b1020,
-  fogDensity: 0.016  // 轻微雾化
+  fogDensity: 0.014  // 轻微雾化
 });
 
 /** 玩家移动参数（原有功能：漫游） */
@@ -78,6 +65,13 @@ export const PLAYER = Object.freeze({
   mouseSensitivity: 0.0023
 });
 
+/** LLM 提供方（V1：默认离线引擎，保证无需联网即可用） */
+export const LLM_PROVIDERS = Object.freeze({
+  OFFLINE: 'offline', // 离线本地引擎（默认，无需联网）
+  WEBLLM: 'webllm',   // 本地 WebLLM 模型（WebGPU，首次需下载模型）
+  API: 'api'          // 在线 API（OpenAI 兼容，需用户配置密钥）
+});
+
 /** WebLLM 可选模型列表（原有功能：本地大模型） */
 export const LLM_MODELS = Object.freeze([
   'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
@@ -85,5 +79,12 @@ export const LLM_MODELS = Object.freeze([
   'Llama-3.2-1B-Instruct-q4f32_1-MLC'
 ]);
 
-/** 默认模型（轻量，适合平板浏览器） */
-export const DEFAULT_MODEL = LLM_MODELS[0];
+/** 在线 API 预设（OpenAI 兼容接口，填 Key 即用） */
+export const API_PRESETS = Object.freeze([
+  { name: 'DeepSeek',    baseUrl: 'https://api.deepseek.com/v1',                  model: 'deepseek-chat' },
+  { name: '通义千问 Qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+  { name: '智谱 GLM',    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',         model: 'glm-4-flash' },
+  { name: 'Moonshot Kimi', baseUrl: 'https://api.moonshot.cn/v1',                 model: 'moonshot-v1-8k' },
+  { name: 'OpenAI',      baseUrl: 'https://api.openai.com/v1',                    model: 'gpt-4o-mini' },
+  { name: '自定义',       baseUrl: '',                                             model: '' }
+]);
