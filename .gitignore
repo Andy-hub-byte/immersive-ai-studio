@@ -1,0 +1,15 @@
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.vscode/
+.idea/
+
+# 日志
+*.log
+npm-debug.log*
+
+# 依赖（本项目为纯静态站点，无 node_modules）
+node_modules/
+.codebuddy/
