@@ -1,56 +1,66 @@
 /**
- * agents.js — Agent 管理与行为核心
+ * agents.js — Agent 管理与行为核心（V1）
  * 包含：
- *  - 原有功能：3 个基础 Agent（规划 / 编码 / 创作）的可视化与协作
- *  - 原有功能：编码Agent 读取 / 修改虚拟文件系统中的代码
- *  - V1新增：4 种基础状态机（空闲 / 思考 / 执行任务 / 对话）与状态切换
- *  - V1新增：Agent 思考内容与互相发送的消息（经 LogPanel 流式输出）
- * 说明：V1 明确不开发 NavMesh 寻路 / AI 自动走路 / 工位移移动 / 聚集开会等逻辑，
- *       Agent 位置固定于各自工位，仅做肢体与状态动画。
+ *  - 动态 Agent 系统：最多 10 个简约人形 AI 员工，自定义名称与岗位，
+ *    占用场景中 10 个槽位之一；支持添加 / 删除 / 选中。
+ *  - 4 种基础状态机：空闲 / 思考 / 执行任务 / 对话，头顶与面板实时展示。
+ *  - 任务执行：选中 Agent → 下发任务指令 → 思考（流式）→ 执行（含代码修改）→ 空闲。
+ *  - 多 Agent 协作：回复中的 [TO:名字] 指令会转派给对应 Agent，消息记入日志。
+ *  - AI 连接：默认走 llm 服务的“离线本地引擎”；配置 WebLLM / 在线 API 后
+ *    自动切换为真实大模型推理（见 llm.js）。
+ * 说明：V1 不开发 NavMesh 寻路 / AI 自动走路 / 工位移动 / 聚集开会等逻辑，
+ *       Agent 位置固定于各自槽位，仅做肢体与状态动画。
  */
-import { AGENTS, AgentState, StateMeta } from './config.js';
+import { AGENT_SLOTS, AGENT_COLORS, MAX_AGENTS, AgentState, StateMeta } from './config.js';
 import * as THREE from 'three';
 import { AgentAvatar } from './avatar.js';
 import { vfs } from './vfs.js';
 
-/** 各 Agent 的系统提示词（本地大模型 / 演示模式共用） */
+/** 依据岗位文本推断行为原型（用于离线引擎选择回复风格） */
+function detectArchetype(role = '') {
+  if (/编码|程序|开发|前端|后端|测试|工程|算法|码农|software|dev/i.test(role)) return 'coder';
+  if (/规划|产品|经理|主管|策划|项目|运营|plan|pm/i.test(role)) return 'planner';
+  if (/设计|创作|文案|美术|视觉|创意|UI|艺术|design|art/i.test(role)) return 'artist';
+  return 'generic';
+}
+
+/** 各原型的系统提示词（真实大模型模式下使用） */
 const SYSTEM_PROMPTS = {
-  planner:
-`你是虚拟AI工作室的"规划Agent"，负责需求分析与任务拆解。
-回答需简洁、结构化（可用编号列表）。当需要其他Agent落地实现时，
-在回复末尾另起一行输出协作指令，格式严格为：[TO:coder] 或 [TO:artist] 或 [TO:planner]，后接具体指令。
-不要输出与协作无关的方括号指令。`,
-  coder:
-`你是虚拟AI工作室的"编码Agent"，负责编写与修改代码，操作对象是虚拟文件系统（VFS）。
-当被要求修改代码时：先说明读取了哪个文件，然后用一个 \`\`\`cpp 代码块输出该文件的【完整新内容】。
-当被要求普通对话时正常回答，不要输出代码块。`,
-  artist:
-`你是虚拟AI工作室的"创作Agent"，负责文案、创意与内容设计。
-回答需有创意、简洁，可适当使用列表。除非用户明确要求协作，否则不要输出 [TO:xxx] 指令。`
+  planner: '你是虚拟AI工作室的"规划"岗位员工，负责需求分析与任务拆解，回答结构化、简洁。需要他人落地实现时，在回复末尾另起一行输出 [TO:对方名字] 具体指令。',
+  coder: '你是虚拟AI工作室的"编码"岗位员工，负责编写与修改代码，操作对象是虚拟文件系统。被要求修改代码时，先说明读取了哪个文件，然后用一个 ```cpp 代码块输出该文件的完整新内容。',
+  artist: '你是虚拟AI工作室的"创作"岗位员工，负责文案、创意与内容设计，回答有创意、简洁。除非用户明确要求协作，不要输出 [TO:xxx] 指令。',
+  generic: '你是虚拟AI工作室的一名 AI 员工，请根据岗位职责专业、简洁地完成任务。需要同事协作时，可输出 [TO:对方名字] 具体指令。'
 };
+
+let _idSeq = 0; // Agent 自增 ID
 
 export class Agent {
   /**
-   * @param {object} config AGENTS 中的一项
+   * @param {object} cfg { name, role, color, slot }
    * @param {object} deps { avatar, logPanel, manager }
    */
-  constructor(config, { avatar, logPanel, manager }) {
-    this.config = config;
+  constructor(cfg, { avatar, logPanel, manager }) {
+    this.id = `agent_${++_idSeq}`;
+    this.name = cfg.name;
+    this.role = cfg.role;
+    this.archetype = detectArchetype(cfg.role);
+    this.slot = cfg.slot;                 // 占用的槽位（含坐标与标签）
+    this.color = cfg.color;
     this.avatar = avatar;
     this.logPanel = logPanel;
     this.manager = manager;
 
     this.state = AgentState.IDLE;
     this.currentTask = '';
-    this.history = [];      // 历史对话记录（用户↔Agent、Agent↔Agent）
+    this.history = [];      // 历史对话记录
     this.busy = false;      // 防止同一 Agent 并发处理
+    this.slotIndex = cfg.slotIndex; // 占用的槽位索引
   }
 
-  get id() { return this.config.id; }
   get stateLabel() { return StateMeta[this.state].label; }
   get stateCss() { return StateMeta[this.state].css; }
 
-  /* ---------- V1新增：状态机 ---------- */
+  /* ---------- 状态机 ---------- */
   setState(state) {
     if (this.state === state) return;
     this.state = state;
@@ -71,42 +81,36 @@ export class Agent {
   }
   getHistory() { return [...this.history].sort((a, b) => a.time - b.time); }
 
-  /* ---------- 主流程：响应输入（用户指令 / 其他Agent消息） ---------- */
-  /**
-   * @param {string} text 输入内容
-   * @param {object} opts { from:'user'|agentId, mode:'task'|'chat', depth }
-   */
+  /* ---------- 主流程：响应用户指令 / 其他Agent消息 ---------- */
   async respond(text, { from = 'user', mode = 'task', depth = 0 } = {}) {
     if (this.busy) {
-      this.logPanel.addSystem(`${this.config.name} 正忙，已忽略本次输入。`);
+      this.logPanel.addSystem(`${this.name} 正忙，已忽略本次输入。`);
       return;
     }
     this.busy = true;
     try {
       // 1. 记录输入
-      const rec = { from, to: this.id, text, time: Date.now() };
-      this.pushHistory(rec);
+      this.pushHistory({ from, to: this.id, text, time: Date.now() });
       if (from === 'user') {
-        this.logPanel.addMessage('你', this.config.name, text, 'user', this.id);
+        this.logPanel.addMessage('你', this.name, text, 'user', this.id);
       }
 
       // 2. 进入思考 / 对话状态
       this._pendingTask = text.length > 40 ? text.slice(0, 40) + '…' : text;
       this.setState(mode === 'chat' ? AgentState.TALKING : AgentState.THINKING);
 
-      // 3. 调用本地大模型（或演示模式），流式输出“思考内容”
+      // 3. 调用 AI（离线引擎 / WebLLM / 在线API），流式输出“思考内容”
       const messages = this._buildMessages(text, from);
       const streamId = this.logPanel.streamStart({ agentId: this.id, type: 'thought' });
-      // 演示模式需要知道当前 Agent 身份
-      this.manager.llm.demoResponder = () => this._demoReply(text, from);
+      // 离线引擎需要知道当前 Agent（岗位原型）
+      this.manager.llm.demoResponder = () => this._offlineReply(text, from);
       const reply = await this.manager.llm.chat(messages, (delta) => {
         this.logPanel.streamChunk(streamId, delta);
       });
       this.logPanel.streamEnd(streamId);
 
       // 4. 记录回复
-      const replyRec = { from: this.id, to: 'user', text: reply, time: Date.now() };
-      this.pushHistory(replyRec);
+      this.pushHistory({ from: this.id, to: 'user', text: reply, time: Date.now() });
       if (mode === 'chat') this.avatar.showBubble(reply); // 对话状态显示气泡
 
       // 5. 解析回复中的协作与代码动作
@@ -122,39 +126,44 @@ export class Agent {
 
   /** 构造发送给大模型的消息列表 */
   _buildMessages(text, from) {
-    const msgs = [{ role: 'system', content: SYSTEM_PROMPTS[this.id] }];
-    // 附带虚拟文件系统概况（编码Agent 需要知道有哪些文件可操作）
-    if (this.id === 'coder') {
-      const files = vfs.list().map((f) => `${f.name}（${f.content.split('\n').length}行，最近修改：${f.updatedBy}）`).join('；');
+    const msgs = [{ role: 'system', content: SYSTEM_PROMPTS[this.archetype] }];
+    // 附带虚拟文件系统概况（编码岗位需要知道有哪些文件可操作）
+    if (this.archetype === 'coder') {
+      const files = vfs.list().map((f) => `${f.name}（${f.content.split('\n').length}行）`).join('；');
       msgs.push({ role: 'system', content: `虚拟文件系统当前文件：${files || '（空）'}` });
     }
     // 最近几轮对话作为上下文
     for (const h of this.getHistory().slice(-6)) {
       if (h.from === this.id) msgs.push({ role: 'assistant', content: h.text });
-      else msgs.push({ role: 'user', content: (h.from === 'user' ? '用户' : this.manager.get(h.from)?.config.name || h.from) + '：' + h.text });
+      else msgs.push({ role: 'user', content: (h.from === 'user' ? '用户' : this.manager.get(h.from)?.name || h.from) + '：' + h.text });
     }
     if (from === 'user') msgs.push({ role: 'user', content: text });
-    else msgs.push({ role: 'user', content: `（来自 ${this.manager.get(from)?.config.name || from} 的协作消息）${text}` });
+    else msgs.push({ role: 'user', content: `（来自 ${this.manager.get(from)?.name || from} 的协作消息）${text}` });
     return msgs;
   }
 
   /* ---------- 动作解析：协作指令 / 代码修改 ---------- */
   async _processActions(reply, originText, depth) {
-    // a. 协作指令 [TO:xxx] ...
-    const delegations = [...reply.matchAll(/\[TO:\s*(planner|coder|artist)\]\s*([^\n]+)/g)];
-    for (const [, targetId, cmd] of delegations) {
+    // a. 协作指令 [TO:名字] …
+    const delegations = [...reply.matchAll(/\[TO:([^\]\n]+)\]/g)];
+    for (const [, targetName] of delegations) {
       if (depth >= 3) { this.logPanel.addSystem('协作深度已达上限，停止继续转派。'); break; }
-      this.manager.routeMessage(this, targetId, cmd.trim(), depth + 1);
+      const target = this.manager.findByName(targetName.trim());
+      // 提取该指令后的内容（同指令行的剩余部分）
+      const idx = reply.indexOf(`[TO:${targetName}]`);
+      const cmd = reply.slice(idx + `[TO:${targetName}]`.length).split('\n')[0].trim();
+      if (target && cmd) this.manager.routeMessage(this, target, cmd, depth + 1);
+      else if (!target) this.logPanel.addSystem(`未找到名为「${targetName.trim()}」的同事，转派取消。`);
     }
-    // b. 代码块 → 编码Agent 写入虚拟文件系统
+    // b. 代码块 → 编码岗位员工写入虚拟文件系统
     const codeBlock = reply.match(/```(?:cpp|c\+\+)?\s*\n([\s\S]*?)```/);
-    if (codeBlock && this.id === 'coder') {
+    if (codeBlock && this.archetype === 'coder') {
       await this.executeCodeTask(codeBlock[1], originText);
     }
   }
 
   /**
-   * 原有功能：编码Agent 读取并修改代码文件
+   * 执行“代码修改”任务：读取虚拟文件 → 写入新内容 → 记录日志
    * @param {string} newContent 文件完整新内容
    * @param {string} instruction 触发指令
    */
@@ -171,11 +180,13 @@ export class Agent {
     try { oldContent = vfs.read(fileName); } catch { /* 新文件 */ }
     this.logPanel.addAction(this, `读取文件 ${fileName}（${oldContent ? oldContent.split('\n').length + ' 行' : '新文件'}）`);
 
-    // 模拟执行耗时，让“执行任务”状态可见
-    await new Promise((r) => setTimeout(r, 600));
+    // 分步执行日志，让“执行任务”状态过程可见
+    await new Promise((r) => setTimeout(r, 500));
+    this.logPanel.addAction(this, `分析修改点并生成新版本…`);
+    await new Promise((r) => setTimeout(r, 500));
 
-    // 写入虚拟文件系统
-    vfs.write(fileName, newContent.endsWith('\n') ? newContent : newContent + '\n', 'coder');
+    // 写入虚拟文件系统（纯内存）
+    vfs.write(fileName, newContent.endsWith('\n') ? newContent : newContent + '\n', this.name);
 
     const oldLines = oldContent ? oldContent.split('\n').length : 0;
     const newLines = newContent.split('\n').length;
@@ -184,46 +195,55 @@ export class Agent {
     this.avatar.showBubble(`已更新 ${fileName}`, 3200);
   }
 
-  /* ---------- 演示模式回复（未加载本地大模型时的兜底） ---------- */
-  _demoReply(text, from) {
-    const t = text.toLowerCase();
-    if (this.id === 'planner') {
-      const needCode = /(实现|开发|做一|写个|写一个|功能|程序|代码|修改|上线)/.test(text);
+  /* ---------- 离线本地引擎回复（默认 AI，无需联网） ---------- */
+  _offlineReply(text, from) {
+    if (this.archetype === 'planner') {
+      // 规划岗：输出拆解方案；涉及实现时转派给第一位编码岗同事
+      const coder = this.manager.findByArchetype('coder');
+      const needCode = /(实现|开发|做一|写个|写一个|功能|程序|代码|修改|上线|排序|计算)/.test(text);
       const plan =
 `收到需求：「${text}」
 我的拆解方案：
 1. 明确目标与验收标准；
 2. 划分模块：核心逻辑 → 数据结构 → 交互层；
 3. 排期：设计 0.5 天 / 实现 1 天 / 联调 0.5 天；
-4. 风险：本地模型加载耗时需提前预热。`;
-      return needCode ? plan + '\n[TO:coder] 请按上述方案实现核心功能，并更新 main.cpp。' : plan;
+4. 风险：本地资源与性能需提前验证。`;
+      return (needCode && coder) ? plan + `\n[TO:${coder.name}] 请按上述方案实现核心功能，并更新 main.cpp。` : plan;
     }
-    if (this.id === 'coder') {
-      // 真实执行一次“读取 + 修改”：基于关键词生成针对性代码改动
+    if (this.archetype === 'coder') {
+      // 编码岗：真实执行一次“读取 + 修改”
       const fileName = (text.match(/([\w.-]+\.(?:cpp|h|md|txt))/) || [])[1] || 'main.cpp';
       let oldContent = '';
       try { oldContent = vfs.read(fileName); } catch { /* 新文件 */ }
-      const snippet = this._demoCodeSnippet(text, oldContent);
+      const snippet = this._offlineCodeSnippet(text, oldContent);
       return `已读取 ${fileName}（${oldContent ? oldContent.split('\n').length + ' 行' : '新文件'}），按需求修改如下：
 \`\`\`cpp
 ${snippet}
 \`\`\``;
     }
-    // artist
-    return `为「${text}」准备了三版创意方向：
-1. 《把重复交给 Agent，把创造留给自己》——理性共鸣向；
-2. 《三个 AI 打工人，一间不会熄灯的办公室》——故事向；
+    if (this.archetype === 'artist') {
+      return `为「${text}」准备了三版创意方向：
+1. 《把重复交给 AI，把创造留给自己》——理性共鸣向；
+2. 《一群不会下班的 AI 打工人》——故事向；
 3. 《你的团队，24 小时在线》——效率向。
 建议搭配低多边形办公室视觉，强化"沉浸式"体感。`;
+    }
+    // 通用岗
+    return `（${this.role}）已接获任务：「${text}」
+执行思路：
+1. 明确交付物与验收标准；
+2. 拆解为可并行的子任务；
+3. 按时序推进并同步风险。
+如需其他岗位协作，可在指令中 @对应同事。`;
   }
 
-  /** 演示模式：生成一段针对需求的代码（基于原文件内容做真实追加修改） */
-  _demoCodeSnippet(text, oldContent) {
+  /** 离线引擎：基于关键词生成针对性代码（对原文件做真实追加修改） */
+  _offlineCodeSnippet(text, oldContent) {
     let fn = '';
     if (/排序|sort/i.test(text)) {
       fn =
 `
-// ===== 由编码Agent 追加：冒泡排序 =====
+// ===== 由 ${this.name} 追加：冒泡排序 =====
 void bubbleSort(std::vector<int>& a) {
     for (size_t i = 0; i + 1 < a.size(); ++i)
         for (size_t j = 0; j + 1 < a.size() - i; ++j)
@@ -233,7 +253,7 @@ void bubbleSort(std::vector<int>& a) {
     } else if (/斐波那契|fib/i.test(text)) {
       fn =
 `
-// ===== 由编码Agent 追加：斐波那契 =====
+// ===== 由 ${this.name} 追加：斐波那契 =====
 long long fib(int n) {
     if (n <= 1) return n;
     long long a = 0, b = 1;
@@ -244,9 +264,9 @@ long long fib(int n) {
     } else {
       fn =
 `
-// ===== 由编码Agent 追加：工作室状态打印 =====
+// ===== 由 ${this.name} 追加：工作室状态打印 =====
 void printStudioStatus() {
-    std::cout << "[studio] agents: planner/coder/artist all idle" << std::endl;
+    std::cout << "[studio] all agents online" << std::endl;
 }
 `;
     }
@@ -260,55 +280,126 @@ void printStudioStatus() {
   }
 }
 
-/* ============================================================ */
-
+/* ============================================================
+ * AgentManager：动态增删、选中、拾取、协作路由
+ * ============================================================ */
 export class AgentManager {
   /**
    * @param {object} deps
    * @param {StudioScene} deps.studio 场景实例
-   * @param {Map<string, Agent>} deps.agents Agent 集合（外部注入，供日志/详情面板共享）
+   * @param {Map<string, Agent>} deps.agents Agent 集合（外部注入共享）
    * @param {LogPanel} deps.logPanel 右侧日志面板
-   * @param {LLMService} deps.llm 本地大模型服务
+   * @param {LLMService} deps.llm AI 服务
    * @param {PlayerController} deps.player 玩家控制器（定位视角用）
-   * @param {(agentId:string)=>void} deps.onPick 点击 Agent 回调
+   * @param {(agent:Agent)=>void} deps.onSelect 选中变化回调
+   * @param {()=>void} deps.onAgentsChanged 增删回调（刷新 UI）
    */
-  constructor({ studio, agents, logPanel, llm, player, onPick }) {
+  constructor({ studio, agents, logPanel, llm, player, onSelect, onAgentsChanged }) {
     this.studio = studio;
     this.agents = agents || new Map();
     this.logPanel = logPanel;
     this.llm = llm;
     this.player = player;
-    this.onPick = onPick;
+    this.onSelect = onSelect || (() => {});
+    this.onAgentsChanged = onAgentsChanged || (() => {});
     this.hovered = null;
+    this.selected = null;
+    this._usedSlots = new Set(); // 已被占用的槽位索引
+    this._tmpScale = new THREE.Vector3(); // 帧更新复用的临时向量
   }
 
-  /** 构建 3 个基础 Agent（原有功能） */
-  build() {
-    for (const cfg of AGENTS) {
-      const avatar = new AgentAvatar(cfg);
-      this.studio.scene.add(avatar.group);
-      const agent = new Agent(cfg, { avatar, logPanel: this.logPanel, manager: this });
-      this.agents.set(cfg.id, agent);
-      // 注册射线拾取目标
-      this.studio.raycastTargets.push(avatar.group);
+  /** 添加 Agent（分配空闲槽位与配色）；达到上限返回 null */
+  addAgent({ name, role }) {
+    if (this.agents.size >= MAX_AGENTS) return null;
+    // 名称查重
+    if (this.findByName(name)) return null;
+    // 找空闲槽位
+    let slotIdx = -1;
+    for (let i = 0; i < AGENT_SLOTS.length; i++) {
+      if (!this._usedSlots.has(i)) { slotIdx = i; break; }
     }
+    if (slotIdx < 0) return null;
+    const slot = AGENT_SLOTS[slotIdx];
+    const color = AGENT_COLORS[this.agents.size % AGENT_COLORS.length];
+
+    const cfg = {
+      id: `agent_${Date.now()}_${slotIdx}`,
+      name: name.trim(),
+      role: (role || 'AI员工').trim(),
+      color,
+      cssColor: '#' + color.toString(16).padStart(6, '0'),
+      initial: name.trim().slice(0, 1),
+      position: { x: slot.x, z: slot.z },
+      facing: slot.yaw,
+      slot,          // 槽位对象（含 label 工位名，供详情面板展示）
+      slotIndex: slotIdx
+    };
+    const avatar = new AgentAvatar(cfg);
+    this.studio.scene.add(avatar.group);
+    this.studio.raycastTargets.push(avatar.group);
+
+    const agent = new Agent(cfg, { avatar, logPanel: this.logPanel, manager: this });
+    this.agents.set(agent.id, agent);
+    this._usedSlots.add(slotIdx);
+
+    this.logPanel.addSystem(`新员工「${agent.name}」（${agent.role}）入职，工位：${slot.label}。`);
+    this.onAgentsChanged();
+    return agent;
+  }
+
+  /** 删除 Agent（释放槽位与 3D 形象） */
+  removeAgent(id) {
+    const agent = this.agents.get(id);
+    if (!agent) return;
+    this.studio.scene.remove(agent.avatar.group);
+    const i = this.studio.raycastTargets.indexOf(agent.avatar.group);
+    if (i >= 0) this.studio.raycastTargets.splice(i, 1);
+    this.agents.delete(id);
+    this._usedSlots.delete(agent.slotIndex);
+    if (this.selected === agent) this.select(null);
+    if (this.hovered === agent) this.hovered = null;
+    this.logPanel.addSystem(`员工「${agent.name}」已离职。`);
+    this.onAgentsChanged();
+  }
+
+  _slotIndexOf(agent) {
+    return AGENT_SLOTS.findIndex((s) => s.x === agent.slot.x && s.z === agent.slot.z);
   }
 
   get(id) { return this.agents.get(id); }
 
-  /** Agent 间消息路由（V1新增：互相发送的消息记录） */
-  routeMessage(fromAgent, toId, text, depth = 0) {
-    const to = this.agents.get(toId);
-    if (!to) { this.logPanel.addSystem(`协作目标不存在：${toId}`); return; }
-    this.logPanel.addMessage(fromAgent.config.name, to.config.name, text, fromAgent.id, to.id);
+  /** 按名称查找 Agent（用于 [TO:名字] 转派） */
+  findByName(name) {
+    const n = name.trim();
+    for (const a of this.agents.values()) if (a.name === n) return a;
+    return null;
+  }
+
+  /** 按行为原型查找（如找第一位编码岗同事） */
+  findByArchetype(type) {
+    for (const a of this.agents.values()) if (a.archetype === type) return a;
+    return null;
+  }
+
+  /** 选中 Agent（3D 高亮 + 面板联动） */
+  select(agent) {
+    if (this.selected === agent) return;
+    if (this.selected) this.selected.avatar.setSelected(false);
+    this.selected = agent || null;
+    if (this.selected) this.selected.avatar.setSelected(true);
+    this.onSelect(this.selected);
+  }
+
+  /** Agent 间消息路由（互相发送的消息记录） */
+  routeMessage(fromAgent, toAgent, text, depth = 0) {
+    this.logPanel.addMessage(fromAgent.name, toAgent.name, text, fromAgent.id, toAgent.id);
     // 接收方进入处理流程（转派来的消息按任务处理）
-    to.respond(text, { from: fromAgent.id, mode: 'task', depth });
+    toAgent.respond(text, { from: fromAgent.id, mode: 'task', depth });
   }
 
   /* ---------- 射线拾取（点击 / 悬停 Agent） ---------- */
   pick(clientX, clientY) {
-    // 注意：必须基于画布自身的矩形计算 NDC（画布宽度小于窗口宽度时，
-    // 直接用窗口尺寸会导致偏离画布中心的 Agent 点击偏移）
+    // 必须基于画布矩形计算 NDC（画布宽度小于窗口宽度）
     const rect = this.studio.renderer.domElement.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
     const ndc = new THREE.Vector2(
@@ -329,22 +420,18 @@ export class AgentManager {
   }
 
   /** 准星中心拾取（指针锁定沉浸模式） */
-  pickCenter() {
-    return this.pick(window.innerWidth / 2, window.innerHeight / 2);
-  }
+  pickCenter() { return this.pick(window.innerWidth / 2, window.innerHeight / 2); }
 
   /* ---------- 每帧更新 ---------- */
   update(dt, elapsed) {
     for (const agent of this.agents.values()) {
       agent.avatar.update(elapsed, agent.state);
-    }
-    // 悬停高亮：光环轻微放大
-    if (this.hovered) {
-      const ring = this.hovered.avatar.statusRing;
-      ring.scale.lerp(new THREE.Vector3(1.18, 1.18, 1.18), 0.2);
-    }
-    for (const agent of this.agents.values()) {
-      if (agent !== this.hovered) agent.avatar.statusRing.scale.lerp(new THREE.Vector3(1, 1, 1), 0.2);
+      // 光环缩放目标：选中 1.35 > 悬停 1.18 > 常态 1.0（平滑过渡）
+      let target = 1;
+      if (agent === this.selected) target = 1.35;
+      else if (agent === this.hovered) target = 1.18;
+      this._tmpScale.setScalar(target);
+      agent.avatar.statusRing.scale.lerp(this._tmpScale, 0.2);
     }
   }
 
@@ -352,10 +439,9 @@ export class AgentManager {
   locate(agent) {
     const p = agent.avatar.group.position;
     const px = p.x, pz = p.z + 2.4;
-    // 计算面向 Agent 的偏航角
     const dx = p.x - px, dz = p.z - pz;
     const yaw = Math.atan2(-dx, -dz);
     this.player.teleport(px, pz, yaw);
-    this.logPanel.addSystem(`视角已定位到 ${agent.config.name} 的工位。`);
+    this.logPanel.addSystem(`视角已定位到 ${agent.name} 的工位（${agent.slot.label}）。`);
   }
 }
