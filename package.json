@@ -1,0 +1,12 @@
+{
+  "name": "immersive-ai-studio",
+  "version": "1.0.0",
+  "description": "网页沉浸式虚拟AI工作室平台 V1：低多边形3D办公室 + 3个基础Agent + 右侧流式日志控制台",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "dev": "python3 -m http.server 8080"
+  },
+  "license": "MIT"
+}
