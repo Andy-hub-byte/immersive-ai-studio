@@ -23,7 +23,7 @@
   <div id="app">
     <!-- ============ 中间主体区域：3D 工作室视口 ============ -->
     <main id="viewport">
-      <!-- 顶部左侧 HUD：品牌 + 模型状态 + 功能入口 -->
+      <!-- 顶部左侧 HUD：品牌 + AI连接状态 + 功能入口 -->
       <header id="hud">
         <div class="hud-brand">
           <span class="hud-logo" aria-hidden="true"></span>
@@ -33,14 +33,14 @@
           </div>
         </div>
         <div class="hud-status">
-          <!-- 本地大模型运行状态指示（原有功能：WebLLM） -->
-          <span id="model-status" class="chip chip-warn" data-state="unloaded">
-            <i class="dot"></i><span id="model-status-text">本地模型未加载</span>
+          <!-- AI 连接状态指示（默认离线AI引擎，无需联网） -->
+          <span id="model-status" class="chip chip-ok" data-state="ready" title="当前 AI 连接通道">
+            <i class="dot"></i><span id="model-status-text">离线AI引擎（默认）</span>
           </span>
         </div>
         <nav id="hud-actions">
-          <button class="hud-btn" id="btn-open-chat" type="button">对话</button>
-          <button class="hud-btn" id="btn-open-code" type="button">C++编译器</button>
+          <button class="hud-btn" id="btn-open-chat" type="button">AI连接</button>
+          <button class="hud-btn" id="btn-open-code" type="button">C++实验室</button>
           <button class="hud-btn" id="btn-open-files" type="button">代码文件</button>
         </nav>
       </header>
@@ -49,9 +49,12 @@
       <div id="canvas-wrap"></div>
       <div id="crosshair" hidden></div>
 
-      <!-- 触屏设备：移动摇杆（原有功能：漫游） -->
-      <div id="touch-joystick" hidden>
-        <div id="joystick-base"><div id="joystick-knob"></div></div>
+      <!-- 触屏设备：方向按钮（平板触屏优先：按钮移动 + 拖拽转视角） -->
+      <div id="touch-dpad" hidden>
+        <button class="dpad-btn dpad-up" data-dir="up" type="button" aria-label="前进">▲</button>
+        <button class="dpad-btn dpad-left" data-dir="left" type="button" aria-label="左移">◀</button>
+        <button class="dpad-btn dpad-right" data-dir="right" type="button" aria-label="右移">▶</button>
+        <button class="dpad-btn dpad-down" data-dir="down" type="button" aria-label="后退">▼</button>
       </div>
 
       <!-- 底部操作提示 -->
@@ -59,11 +62,11 @@
         <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动</span>
         <span><kbd>Shift</kbd> 加速</span>
         <span>点击AI小人 · 查看详情</span>
-        <span><kbd>Esc</kbd> 释放鼠标</span>
+        <span>触屏：方向键移动 · 拖动转视角</span>
       </footer>
     </main>
 
-    <!-- ============ 页面右侧：固定深色面板（V1新增：日志 + 状态） ============ -->
+    <!-- ============ 页面右侧：固定深色面板（V1新增：员工 + 状态 + 日志） ============ -->
     <aside id="side-panel">
       <div class="side-head">
         <div class="side-title">
@@ -73,10 +76,22 @@
         <button id="btn-clear-log" class="side-icon-btn" type="button" title="清空日志">清屏</button>
       </div>
 
-      <!-- V1新增：3个Agent状态卡片 -->
+      <!-- AI 员工列表（默认 3 人，可手动添加至上限 10 人） -->
+      <div class="agent-list-head">
+        <span>AI 员工</span>
+        <span class="agent-count" id="agent-count">0/10</span>
+      </div>
       <section id="agent-status-list" class="agent-status-list"></section>
 
-      <!-- V1新增：流式思考日志 -->
+      <!-- 添加员工：手动点击添加，逐步扩充团队（默认只加载3个，降低初始渲染开销） -->
+      <form class="agent-add" id="agent-add-form" autocomplete="off">
+        <input id="agent-add-name" type="text" maxlength="8" placeholder="新员工名称（≤8字）" aria-label="新员工名称" />
+        <input id="agent-add-role" type="text" maxlength="12" placeholder="岗位（如：测试）" aria-label="新员工岗位" />
+        <button id="agent-add-btn" class="side-icon-btn primary" type="button">添加</button>
+        <span class="agent-add-hint" id="agent-add-hint">默认 3 人，可添加至 10 人</span>
+      </form>
+
+      <!-- 流式思考日志 -->
       <section class="log-section">
         <div class="log-toolbar" id="log-filters">
           <button class="log-filter active" data-filter="all" type="button">全部</button>
@@ -90,11 +105,8 @@
       <!-- 指令输入：选择Agent并下发任务 -->
       <div class="side-input">
         <div class="side-input-row">
-          <select id="chat-target" aria-label="选择对话Agent">
+          <select id="chat-target" aria-label="选择Agent">
             <option value="">选择 Agent…</option>
-            <option value="planner">规划Agent</option>
-            <option value="coder">编码Agent</option>
-            <option value="artist">创作Agent</option>
           </select>
         </div>
         <div class="side-input-row">
@@ -104,37 +116,85 @@
       </div>
     </aside>
 
-    <!-- ============ 浮动功能面板挂载区（对话 / 编译器 / 文件） ============ -->
+    <!-- ============ 浮动功能面板挂载区（AI连接 / C++实验室 / 文件） ============ -->
     <div id="floating-panels" hidden>
-      <!-- 原有功能：WebLLM 本地大模型对话面板 -->
+      <!-- AI 连接面板：离线引擎（默认）/ WebLLM 本地模型 / 在线API 三通道 -->
       <section class="float-panel" id="panel-chat" hidden>
         <header class="float-head">
-          <strong>本地大模型对话</strong>
+          <strong>AI 连接设置</strong>
           <div class="float-head-actions">
-            <button class="side-icon-btn" id="btn-load-model" type="button">加载模型</button>
             <button class="side-icon-btn panel-close" type="button">关闭</button>
           </div>
         </header>
-        <div class="model-bar">
+
+        <!-- 通道切换 -->
+        <div class="ai-provider-bar">
+          <label class="ai-radio">
+            <input type="radio" name="ai-provider" value="offline" checked />
+            <span><strong>离线AI引擎</strong><small>内置规则引擎，无需联网，开箱即用（默认）</small></span>
+          </label>
+          <label class="ai-radio">
+            <input type="radio" name="ai-provider" value="webllm" />
+            <span><strong>本地大模型 WebLLM</strong><small>浏览器内 WebGPU 推理，首次需下载模型权重</small></span>
+          </label>
+          <label class="ai-radio">
+            <input type="radio" name="ai-provider" value="api" />
+            <span><strong>在线 API</strong><small>OpenAI 兼容接口，填写地址/密钥/模型名即用</small></span>
+          </label>
+        </div>
+
+        <!-- WebLLM 模型加载 -->
+        <div class="model-bar" id="webllm-bar">
           <select id="model-select" aria-label="选择模型">
             <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC">Qwen2.5-1.5B（约1GB·推荐）</option>
             <option value="Qwen2.5-3B-Instruct-q4f16_1-MLC">Qwen2.5-3B（约2GB）</option>
             <option value="Llama-3.2-1B-Instruct-q4f32_1-MLC">Llama-3.2-1B（约1.3GB）</option>
           </select>
+          <button class="side-icon-btn" id="btn-load-model" type="button">加载模型</button>
           <div id="model-progress" class="model-progress" hidden><div id="model-progress-bar"></div></div>
         </div>
+
+        <!-- 在线 API 配置 -->
+        <div class="api-config" id="api-config" hidden>
+          <div class="api-row">
+            <select id="api-preset" aria-label="API预设"></select>
+          </div>
+          <div class="api-row">
+            <input id="api-base" type="text" placeholder="接口地址，如 https://api.deepseek.com/v1" autocomplete="off" />
+          </div>
+          <div class="api-row">
+            <input id="api-key" type="password" placeholder="API Key（仅保存在本机浏览器）" autocomplete="off" />
+          </div>
+          <div class="api-row">
+            <input id="api-model" type="text" placeholder="模型名，如 deepseek-chat" autocomplete="off" />
+          </div>
+          <div class="api-row api-actions">
+            <button class="side-icon-btn primary" id="btn-save-api" type="button">保存配置</button>
+          </div>
+        </div>
+
+        <!-- 测试当前 AI 通道连接（对三种通道均可用） -->
+        <div class="ai-test-bar">
+          <button class="side-icon-btn" id="btn-test-api" type="button">测试连接</button>
+          <span class="ai-test-hint">点击验证当前 AI 通道能否正常响应</span>
+        </div>
+
+        <!-- 与本地大模型直接对话（调试通道用） -->
         <div id="chat-messages" class="chat-messages"></div>
         <div class="chat-input-row">
-          <input id="chat-llm-input" type="text" placeholder="与本地大模型直接对话…" autocomplete="off" />
+          <input id="chat-llm-input" type="text" placeholder="与当前 AI 通道直接对话（测试用）…" autocomplete="off" />
           <button id="chat-llm-send" class="send-btn" type="button">发送</button>
         </div>
       </section>
 
-      <!-- 原有功能：C++ 在线编译器面板 -->
+      <!-- C++ 编程实验室（V1 壳子：离线结构检查+模拟运行；可选联网真实编译） -->
       <section class="float-panel" id="panel-code" hidden>
         <header class="float-head">
-          <strong>C++ 在线编译器</strong>
+          <strong>C++ 编程实验室</strong>
           <div class="float-head-actions">
+            <label class="online-check" title="勾选后连接在线编译器（Wandbox/Piston）真实编译运行，需要网络">
+              <input type="checkbox" id="cpp-online" /> 联网真实编译
+            </label>
             <button class="side-icon-btn" id="btn-save-cpp" type="button">保存</button>
             <button class="side-icon-btn" id="btn-run-cpp" type="button">运行</button>
             <button class="side-icon-btn panel-close" type="button">关闭</button>
@@ -146,7 +206,7 @@
         <div id="cpp-output" class="cpp-output" role="log"></div>
       </section>
 
-      <!-- 原有功能：代码文件面板（编码Agent读取/修改的对象） -->
+      <!-- 代码文件面板（编码Agent读取/修改的对象） -->
       <section class="float-panel" id="panel-files" hidden>
         <header class="float-head">
           <strong>代码文件</strong>
@@ -173,10 +233,14 @@
             <strong id="detail-name">Agent</strong>
             <small id="detail-role">岗位</small>
           </div>
-          <span class="detail-state" id="detail-state-chip">状态</span>
+          <span class="detail-state state-chip" id="detail-state-chip">状态</span>
           <button class="side-icon-btn" id="detail-close" type="button">关闭</button>
         </header>
         <div class="detail-body">
+          <div class="detail-block">
+            <h4>工位</h4>
+            <p id="detail-slot">—</p>
+          </div>
           <div class="detail-block">
             <h4>当前任务</h4>
             <p id="detail-task">暂无</p>
