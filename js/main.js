@@ -1,14 +1,18 @@
 /**
  * main.js — 平台入口：初始化场景、玩家、Agent、各面板与交互
  *
- * 页面布局（严格参考 the-delegation 截图）：
+ * 页面布局（参考 the-delegation 的沉浸式布局）：
  *   中间主体 = 3D 低多边形工作室场景；页面右侧 = 固定深色控制台
- *   （Agent 状态卡片 + 流式思考/消息日志 + 指令输入）。
+ *   （AI 员工列表 + 添加员工 + 流式思考/消息日志 + 指令输入）。
  *
  * 功能划分：
- *   - 原有功能：玩家漫游与碰撞、3 个基础 Agent、WebLLM 对话、C++ 编译器、
- *               编码Agent 读取/修改代码（均未改动核心逻辑）
- *   - V1新增：Agent 四状态、右侧流式日志面板、Agent 详情弹窗
+ *   - 基础功能：玩家漫游与碰撞、Agent 系统、本地 AI 对话、C++ 实验室
+ *   - V1 新增：Agent 四状态（空闲/思考/执行任务/对话）、右侧流式日志面板、
+ *     Agent 详情弹窗（名称/岗位/状态/当前任务/历史对话）
+ *
+ * 性能约束（重要）：
+ *   启动时默认只创建 3 个 Agent（规划/编码/创作），其余 7 个槽位空置，
+ *   由用户在右侧面板手动点击"添加"逐步增加（上限 10），降低初始渲染开销。
  */
 import { StudioScene } from './scene.js';
 import { PlayerController } from './player.js';
@@ -18,8 +22,7 @@ import { AgentManager } from './agents.js';
 import { llm } from './webllm.js';
 import { ChatPanel, CodePanel, FilesPanel, FloatPanelHost } from './uiPanels.js';
 
-/* ================= 1. 场景与玩家（原有功能） ================= */
-const viewport = document.getElementById('viewport');
+/* ================= 1. 场景与玩家（基础功能） ================= */
 const canvasWrap = document.getElementById('canvas-wrap');
 const studio = new StudioScene(canvasWrap);
 studio.resize();
@@ -35,7 +38,21 @@ const agentsMap = new Map();
 const logPanel = new LogPanel({
   root: sidePanel,
   agents: agentsMap,
-  onAgentCardClick: (agentId) => openDetail(agentId)
+  handlers: {
+    // 选中 Agent（3D 点击 / 列表卡片）
+    onSelect: (agent) => agentManager.select(agent),
+    // 打开详情弹窗
+    onDetail: (agent) => openDetail(agent.id),
+    // 移除 Agent
+    onRemove: (agent) => agentManager.removeAgent(agent.id),
+    // 添加 Agent（返回 null 表示失败：超出上限或重名）
+    onAdd: (name, role) => agentManager.addAgent({ name, role }),
+    // 下发任务指令
+    onSend: (agentId, text) => {
+      const agent = agentsMap.get(agentId);
+      if (agent) agent.respond(text, { from: 'user', mode: 'task' });
+    }
+  }
 });
 
 // 点击 3D 小人 → 打开详情弹窗
@@ -47,8 +64,9 @@ function openDetail(agentId) {
 /* ================= 3. Agent 详情弹窗（V1新增） ================= */
 const detailPanel = new DetailPanel(document.getElementById('detail-overlay'), agentsMap);
 detailPanel.on({
-  // 发起对话：选中该 Agent 并聚焦输入框（对话状态）
+  // 发起对话：选中该 Agent 并聚焦输入框
   talk: (agent) => {
+    agentManager.select(agent);
     logPanel.selectTarget(agent.id);
     logPanel.input.focus();
     agent.avatar.showBubble('我在，请说。', 2600);
@@ -57,25 +75,35 @@ detailPanel.on({
   locate: (agent) => agentManager.locate(agent)
 });
 
-/* ================= 4. Agent 管理（原有功能 + V1状态） ================= */
+/* ================= 4. Agent 管理（基础功能 + V1状态） ================= */
 const agentManager = new AgentManager({
   studio,
   agents: agentsMap,
   logPanel,
   llm,
   player,
-  onPick: openDetail
-});
-agentManager.build();
-logPanel.renderAgentCards(); // Agent 构建完成后渲染状态卡片
-
-/* ================= 5. 指令输入：下发给 Agent ================= */
-logPanel.onSend((agentId, text) => {
-  const agent = agentsMap.get(agentId);
-  if (agent) agent.respond(text, { from: 'user', mode: 'task' });
+  // Agent 增删后刷新右侧列表与指令下拉
+  onAgentsChanged: () => {
+    logPanel.refreshAgentCards();
+    logPanel.refreshTargetOptions();
+  }
 });
 
-/* ================= 6. 浮动功能面板（原有功能） ================= */
+/**
+ * 初始员工名单（性能约束：默认只加载 3 个，其余手动添加）
+ * 岗位命名尽量贴合原型识别（规划/编码/创作），保证离线引擎转派链路可用。
+ */
+const INITIAL_AGENTS = [
+  { name: '小规', role: '规划' },
+  { name: '小码', role: '编码' },
+  { name: '小创', role: '创作' }
+];
+for (const cfg of INITIAL_AGENTS) agentManager.addAgent(cfg);
+logPanel.addSystem(`已加载 ${INITIAL_AGENTS.length} 名初始员工（默认数量，节省渲染开销）。`);
+logPanel.addSystem('在下方「添加员工」中输入名称与岗位，可逐步扩充团队（上限 10 人）。');
+logPanel.refreshTargetOptions(); // 刷新指令下拉选项
+
+/* ================= 5. 浮动功能面板（基础功能） ================= */
 const host = new FloatPanelHost(document.getElementById('floating-panels'));
 const chatPanel = new ChatPanel(host);
 const codePanel = new CodePanel(host);
@@ -89,26 +117,23 @@ bindHud('btn-open-chat', 'chat');
 bindHud('btn-open-code', 'code');
 bindHud('btn-open-files', 'files');
 
-/* ================= 7. 模型状态芯片 ================= */
+/* ================= 6. AI 连接状态芯片 ================= */
+// 默认通道为「离线AI引擎」（无需联网即可用），芯片实时反映当前通道
 const modelChip = document.getElementById('model-status');
 const modelChipText = document.getElementById('model-status-text');
-function setModelChip(state, text) {
+function refreshModelChip() {
+  const state = llm.provider === 'offline' ? 'ready' : (llm.ready || llm.provider === 'api' && llm.api.apiKey) ? 'ready' : 'warn';
   modelChip.dataset.state = state;
   modelChip.className = `chip ${state === 'ready' ? 'chip-ok' : 'chip-warn'}`;
-  modelChipText.textContent = text;
+  modelChipText.textContent = llm.statusText();
 }
-// 监听模型加载结果（ChatPanel 触发）
-const origLoad = chatPanel.loadModel.bind(chatPanel);
-chatPanel.loadModel = async () => {
-  setModelChip('loading', '模型加载中…');
-  await origLoad();
-  setModelChip(llm.ready ? 'ready' : 'unloaded', llm.ready ? `本地模型就绪` : '本地模型未加载');
-};
+llm.onStatus = refreshModelChip;
+refreshModelChip();
 
-/* ================= 8. 3D 交互：点击 / 悬停 Agent ================= */
+/* ================= 7. 3D 交互：点击 / 悬停 Agent ================= */
 const canvas = studio.renderer.domElement;
 
-// 区分“点击”与“拖动视角”
+// 区分“点击”与“拖动视角”（按下与松开位移小且时间短才算点击）
 let downX = 0, downY = 0, downT = 0;
 canvas.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; downT = performance.now(); });
 canvas.addEventListener('pointerup', (e) => {
@@ -123,7 +148,7 @@ function handleWorldClick(x, y) {
     // 点中 Agent：打开详情弹窗，并退出指针锁定以便操作弹窗
     player.exitLock();
     openDetail(agent.id);
-    logPanel.selectTarget(agent.id); // 联动：选中为指令目标
+    agentManager.select(agent); // 联动：选中为指令目标
   } else if (!player.locked) {
     // 点空白处：进入沉浸漫游模式
     player.requestLock();
@@ -138,52 +163,47 @@ canvas.addEventListener('pointermove', (e) => {
   canvas.style.cursor = agent ? 'pointer' : 'default';
 });
 
-/* ================= 9. 触屏摇杆（原有功能：漫游） ================= */
+/* ================= 8. 触屏方向按钮（平板：按钮移动 + 拖拽转视角） ================= */
+// 复用 player.setJoystick 接口（x: 右为正, y: 前为正），不改动玩家核心逻辑
 if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-  const joy = document.getElementById('touch-joystick');
-  const base = document.getElementById('joystick-base');
-  const knob = document.getElementById('joystick-knob');
-  joy.hidden = false;
-  let joyId = null, cx = 0, cy = 0;
-  const R = 44;
-
-  const moveKnob = (e) => {
-    let dx = e.clientX - cx, dy = e.clientY - cy;
-    const d = Math.hypot(dx, dy);
-    if (d > R) { dx *= R / d; dy *= R / d; }
-    knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    player.setJoystick(dx / R, dy / R); // dy 向下为正 → 前方为 -y
-  };
-  base.addEventListener('pointerdown', (e) => {
-    joyId = e.pointerId;
-    const r = base.getBoundingClientRect();
-    cx = r.left + r.width / 2;
-    cy = r.top + r.height / 2;
-    base.setPointerCapture(e.pointerId);
-    moveKnob(e);
-  });
-  base.addEventListener('pointermove', (e) => { if (e.pointerId === joyId) moveKnob(e); });
-  const release = (e) => {
-    if (e.pointerId !== joyId) return;
-    joyId = null;
-    knob.style.transform = '';
-    player.setJoystick(0, 0);
-  };
-  base.addEventListener('pointerup', release);
-  base.addEventListener('pointercancel', release);
+  const dpad = document.getElementById('touch-dpad');
+  if (dpad) {
+    dpad.hidden = false;
+    const btns = dpad.querySelectorAll('.dpad-btn');
+    btns.forEach((btn) => {
+      const dir = btn.dataset.dir; // up/down/left/right
+      const press = (e) => {
+        e.preventDefault();
+        btn.classList.add('active');
+        // 按钮向量：与摇杆语义一致（y 向下为正 → 前方为 -y）
+        if (dir === 'up') player.setJoystick(0, -1);
+        else if (dir === 'down') player.setJoystick(0, 1);
+        else if (dir === 'left') player.setJoystick(-1, 0);
+        else if (dir === 'right') player.setJoystick(1, 0);
+      };
+      const release = () => {
+        btn.classList.remove('active');
+        player.setJoystick(0, 0); // 松开归零，停止移动
+      };
+      btn.addEventListener('pointerdown', press);
+      btn.addEventListener('pointerup', release);
+      btn.addEventListener('pointercancel', release);
+      btn.addEventListener('pointerleave', release);
+    });
+  }
 }
 
-/* ================= 10. 键盘快捷键 ================= */
+/* ================= 9. 键盘快捷键 ================= */
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && detailPanel.isOpen) detailPanel.close();
 });
 
-/* ================= 11. 窗口尺寸变化 ================= */
+/* ================= 10. 窗口尺寸变化 ================= */
 const resize = () => studio.resize();
 window.addEventListener('resize', resize);
 if (window.ResizeObserver) new ResizeObserver(resize).observe(canvasWrap);
 
-/* ================= 12. 主循环 ================= */
+/* ================= 11. 主循环 ================= */
 let last = performance.now();
 let detailRefreshTimer = 0;
 
@@ -193,9 +213,9 @@ function frame(now) {
   last = now;
   const elapsed = now / 1000;
 
-  player.update(dt);          // 原有功能：漫游 + 碰撞
+  player.update(dt);               // 基础功能：漫游 + 碰撞
   agentManager.update(dt, elapsed); // Agent 待机动画 / 悬停高亮
-  studio.update(dt);          // 屏幕脉冲等环境动画
+  studio.update(dt);                // 屏幕脉冲等环境动画
   studio.render();
 
   // 详情面板打开时周期性刷新状态与历史
