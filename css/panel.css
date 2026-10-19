@@ -27,6 +27,65 @@
   transition: color 0.15s, border-color 0.15s;
 }
 .side-icon-btn:hover { color: var(--text-1); border-color: var(--accent); }
+.side-icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.side-icon-btn.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+.side-icon-btn.primary:hover { filter: brightness(1.15); }
+
+/* AI 员工列表头部（标题 + 人数统计） */
+.agent-list-head {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  letter-spacing: 1px;
+}
+.agent-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(79, 143, 247, 0.35);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.agent-empty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+
+/* 添加员工表单（手动点击添加，默认3人 → 上限10人） */
+.agent-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.agent-add input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 9px;
+  font-size: 12px;
+  color: var(--text-1);
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+}
+.agent-add input:focus { border-color: var(--accent); }
+.agent-add .side-icon-btn { margin-left: 0; }
+.agent-add-hint {
+  flex-basis: 100%;
+  font-size: 10.5px;
+  color: var(--text-3);
+}
 
 /* Agent 状态卡片（V1新增） */
 .agent-status-list {
@@ -80,6 +139,20 @@
   background: rgba(255, 255, 255, 0.03);
 }
 .agent-card .state-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+/* 卡片操作按钮：详情 / 移除 */
+.agent-card .card-actions { display: flex; gap: 5px; flex: none; }
+.mini-btn {
+  padding: 3px 8px;
+  font-size: 10.5px;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.mini-btn:hover { color: var(--text-1); border-color: var(--accent); }
+.mini-btn.danger:hover { color: var(--red); border-color: rgba(248, 113, 113, 0.5); }
 /* 四种状态配色：空闲=灰 / 思考=琥珀 / 执行=蓝 / 对话=紫 */
 .state-idle    { color: var(--gray);   border-color: rgba(100, 116, 139, 0.4); }
 .state-thinking{ color: var(--amber);  border-color: rgba(251, 191, 36, 0.4); }
@@ -234,9 +307,81 @@
 .float-head-actions { margin-left: auto; display: flex; gap: 6px; }
 .float-head .side-icon-btn { margin-left: 0; }
 
+/* AI 连接通道切换（离线引擎 / WebLLM / 在线API） */
+.ai-provider-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.ai-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 8px 10px;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.ai-radio:hover { border-color: var(--accent); }
+.ai-radio input { margin-top: 3px; accent-color: var(--accent); flex: none; }
+.ai-radio span { display: flex; flex-direction: column; gap: 2px; }
+.ai-radio strong { font-size: 12.5px; color: var(--text-1); }
+.ai-radio small { font-size: 10.5px; color: var(--text-3); line-height: 1.4; }
+.ai-radio:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+
+/* 在线 API 配置表单 */
+.api-config {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.api-row { display: flex; gap: 8px; }
+.api-row input, .api-row select {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-1);
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+}
+.api-row input:focus, .api-row select:focus { border-color: var(--accent); }
+.api-actions { justify-content: flex-end; }
+.api-actions .side-icon-btn { margin-left: 0; }
+
+/* 测试连接条（对所有 AI 通道可用） */
+.ai-test-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.ai-test-bar .side-icon-btn { margin-left: 0; flex: none; }
+.ai-test-hint { font-size: 10.5px; color: var(--text-3); }
+
+/* C++ 面板：联网真实编译勾选 */
+.online-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.online-check input { accent-color: var(--accent); }
+
 /* 模型加载条 */
-.model-bar { padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }
-.model-bar select {
+.model-bar { padding: 10px 12px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: center; }.model-bar select {
   flex: 1;
   padding: 7px 9px;
   font-size: 12px;
