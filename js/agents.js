@@ -11,7 +11,7 @@
  * 说明：V1 不开发 NavMesh 寻路 / AI 自动走路 / 工位移动 / 聚集开会等逻辑，
  *       Agent 位置固定于各自槽位，仅做肢体与状态动画。
  */
-import { AGENT_SLOTS, AGENT_COLORS, MAX_AGENTS, AgentState, StateMeta } from './config.js';
+import { AGENT_SLOTS, AGENT_COLORS, MAX_AGENTS, AgentState, StateMeta, AGENT_MOVE } from './config.js';
 import * as THREE from 'three';
 import { AgentAvatar } from './avatar.js';
 import { vfs } from './vfs.js';
@@ -34,6 +34,15 @@ const SYSTEM_PROMPTS = {
 
 let _idSeq = 0; // Agent 自增 ID
 
+/** 角度插值（处理 -π/π 环绕，用于移动转向平滑） */
+function _approachAngle(current, target, maxStep) {
+  let diff = (target - current) % (Math.PI * 2);
+  if (diff > Math.PI) diff -= Math.PI * 2;
+  if (diff < -Math.PI) diff += Math.PI * 2;
+  if (Math.abs(diff) <= maxStep) return target;
+  return current + Math.sign(diff) * maxStep;
+}
+
 export class Agent {
   /**
    * @param {object} cfg { name, role, color, slot }
@@ -55,6 +64,10 @@ export class Agent {
     this.history = [];      // 历史对话记录
     this.busy = false;      // 防止同一 Agent 并发处理
     this.slotIndex = cfg.slotIndex; // 占用的槽位索引
+
+    // —— V1 行为规则：移动相关状态 ——
+    this.moveTarget = null;   // 当前移动目标 {x, z}，null 表示未在移动
+    this._moveResolve = null; // 移动完成Promise的resolve（由帧更新触发）
   }
 
   get stateLabel() { return StateMeta[this.state].label; }
@@ -95,11 +108,24 @@ export class Agent {
         this.logPanel.addMessage('你', this.name, text, 'user', this.id);
       }
 
-      // 2. 进入思考 / 对话状态
       this._pendingTask = text.length > 40 ? text.slice(0, 40) + '…' : text;
+
+      // 2.【V1行为规则】收到任务后移动到目标办公桌位置（移动中遇障自动停止，禁止穿墙）
+      if (this._needMove()) {
+        this.setState(AgentState.EXECUTING);
+        this._pendingTask = `前往${this.slot.label}的目标位置`;
+        const arrived = await this._moveTo(this.slot.work);
+        if (!arrived) {
+          this.logPanel.addAction(this, '移动途中碰到障碍物，已停止移动（禁止穿墙），在原地继续执行任务。');
+        } else {
+          this.logPanel.addAction(this, `已到达${this.slot.label}的目标办公桌位置。`);
+        }
+      }
+
+      // 3. 进入思考 / 对话状态
       this.setState(mode === 'chat' ? AgentState.TALKING : AgentState.THINKING);
 
-      // 3. 调用 AI（离线引擎 / WebLLM / 在线API），流式输出“思考内容”
+      // 4. 调用 AI（离线引擎 / WebLLM / 在线API），流式输出“思考内容”
       const messages = this._buildMessages(text, from);
       const streamId = this.logPanel.streamStart({ agentId: this.id, type: 'thought' });
       // 离线引擎需要知道当前 Agent（岗位原型）
@@ -109,19 +135,89 @@ export class Agent {
       });
       this.logPanel.streamEnd(streamId);
 
-      // 4. 记录回复
+      // 5. 记录回复
       this.pushHistory({ from: this.id, to: 'user', text: reply, time: Date.now() });
       if (mode === 'chat') this.avatar.showBubble(reply); // 对话状态显示气泡
 
-      // 5. 解析回复中的协作与代码动作
+      // 6. 解析回复中的协作与代码动作
       await this._processActions(reply, text, depth);
 
-      // 6. 完成，回到空闲
+      // 7.【V1行为规则】任务执行完毕，自动返回工位原地待命
+      if (this._needMove()) {
+        this._pendingTask = '任务完成，返回工位';
+        const back = await this._moveTo(this.slot);
+        if (back) this.logPanel.addAction(this, '已返回工位，原地待命。');
+        else this.logPanel.addAction(this, '返回工位途中被障碍物阻挡，已停止移动。');
+      }
+
+      // 8. 完成，回到空闲
       this.setState(AgentState.IDLE);
     } finally {
       this.busy = false;
       this._pendingTask = '';
     }
+  }
+
+  /* ---------- V1行为规则：移动系统 ---------- */
+
+  /** 该槽位是否配置了移动行为（工位待命点与目标办公桌位置不同才需要移动） */
+  _needMove() {
+    const w = this.slot.work;
+    if (!w) return false;
+    return Math.hypot(w.x - this.slot.x, w.z - this.slot.z) > AGENT_MOVE.arriveDist + 0.05;
+  }
+
+  /**
+   * 移动到目标点（返回 Promise：true=到达 / false=途中受阻停止）
+   * 移动推进由 AgentManager 每帧调用 _tickMove 完成
+   */
+  _moveTo(target) {
+    const g = this.avatar.group.position;
+    // 已在目标附近，直接完成
+    if (Math.hypot(target.x - g.x, target.z - g.z) <= AGENT_MOVE.arriveDist) {
+      this.moveTarget = null;
+      return Promise.resolve(true);
+    }
+    this.moveTarget = { x: target.x, z: target.z };
+    return new Promise((resolve) => { this._moveResolve = resolve; });
+  }
+
+  /** 每帧移动推进（由 AgentManager.update 调用）：直线移动 + 圆形碰撞检测 */
+  _tickMove(dt) {
+    if (!this.moveTarget || !this._moveResolve) return;
+    const g = this.avatar.group.position;
+    const dx = this.moveTarget.x - g.x;
+    const dz = this.moveTarget.z - g.z;
+    const dist = Math.hypot(dx, dz);
+
+    // 到达目标点
+    if (dist <= AGENT_MOVE.arriveDist) {
+      this.moveTarget = null;
+      const resolve = this._moveResolve;
+      this._moveResolve = null;
+      resolve(true);
+      return;
+    }
+
+    // 计算下一步位置
+    const step = AGENT_MOVE.speed * dt;
+    const nx = g.x + (dx / dist) * step;
+    const nz = g.z + (dz / dist) * step;
+
+    // 移动途中碰到障碍物 → 立即停止（禁止穿墙）
+    if (this.manager.collidesAt(nx, nz, AGENT_MOVE.radius)) {
+      this.moveTarget = null;
+      const resolve = this._moveResolve;
+      this._moveResolve = null;
+      resolve(false);
+      return;
+    }
+
+    // 前进并平滑转向移动方向
+    g.x = nx;
+    g.z = nz;
+    const targetYaw = Math.atan2(dx, dz);
+    this.avatar.group.rotation.y = _approachAngle(this.avatar.group.rotation.y, targetYaw, dt * 8);
   }
 
   /** 构造发送给大模型的消息列表 */
@@ -425,7 +521,8 @@ export class AgentManager {
   /* ---------- 每帧更新 ---------- */
   update(dt, elapsed) {
     for (const agent of this.agents.values()) {
-      agent.avatar.update(elapsed, agent.state);
+      agent._tickMove(dt); // 推进移动（遇障自动停止）
+      agent.avatar.update(elapsed, agent.state, !!agent.moveTarget);
       // 光环缩放目标：选中 1.35 > 悬停 1.18 > 常态 1.0（平滑过渡）
       let target = 1;
       if (agent === this.selected) target = 1.35;
@@ -433,6 +530,30 @@ export class AgentManager {
       this._tmpScale.setScalar(target);
       agent.avatar.statusRing.scale.lerp(this._tmpScale, 0.2);
     }
+  }
+
+  /**
+   * 圆形碰撞检测（Agent 移动避障用，与玩家碰撞逻辑一致）
+   * @param {number} x 目标点 X
+   * @param {number} z 目标点 Z
+   * @param {number} r 圆形半径
+   * @returns {boolean} 是否与任意碰撞体相交
+   */
+  collidesAt(x, z, r) {
+    for (const c of this.studio.colliders) {
+      if (c.type === 'box') {
+        // 圆 vs AABB：求最近点
+        const cx = Math.max(c.minX, Math.min(x, c.maxX));
+        const cz = Math.max(c.minZ, Math.min(z, c.maxZ));
+        const dx = x - cx, dz = z - cz;
+        if (dx * dx + dz * dz < r * r) return true;
+      } else if (c.type === 'circle') {
+        const dx = x - c.x, dz = z - c.z;
+        const rr = r + c.r;
+        if (dx * dx + dz * dz < rr * rr) return true;
+      }
+    }
+    return false;
   }
 
   /** 定位视角：把玩家传送到 Agent 面前并面向他 */
