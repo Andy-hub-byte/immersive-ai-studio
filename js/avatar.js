@@ -2,7 +2,8 @@
  * avatar.js — 简约人形 AI 小人（纯基础几何体搭建）
  * 组成：球体头部 + 胶囊躯干/四肢，非方块；头顶悬浮状态光环与状态珠，
  *      附带 CSS2D 名称标签 / 状态标签 / 对话气泡。
- * V1新增：头顶状态光环颜色随 4 种状态（空闲/思考/执行任务/对话）变化。
+ * V1：头顶状态光环颜色随 4 种状态（空闲/思考/执行任务/对话）变化；
+ *      支持“选中高亮”（被选中的 Agent 光环放大、标签描边）。
  */
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
@@ -10,7 +11,7 @@ import { StateMeta } from './config.js';
 
 export class AgentAvatar {
   /**
-   * @param {object} agentConfig AGENTS 中的一项定义
+   * @param {object} agentConfig { id, name, role, color, position:{x,z}, facing }
    */
   constructor(agentConfig) {
     this.config = agentConfig;
@@ -157,6 +158,14 @@ export class AgentAvatar {
     this.bubbleEl.hidden = false;
     clearTimeout(this._bubbleTimer);
     this._bubbleTimer = setTimeout(() => { this.bubbleEl.hidden = true; }, duration);
+  }
+
+  /** 选中高亮：光环与外圈放大、名称标签高亮描边 */
+  setSelected(on) {
+    this._selected = on;
+    this.tagName.style.borderColor = on ? '#4f8ff7' : '';
+    this.tagName.style.color = on ? '#ffffff' : '';
+    this.statusRing.scale.setScalar(on ? 1.35 : 1);
   }
 
   /** 每帧待机动画（不做位移移动，仅肢体微动） */
