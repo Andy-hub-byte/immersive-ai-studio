@@ -168,23 +168,48 @@ export class AgentAvatar {
     this.statusRing.scale.setScalar(on ? 1.35 : 1);
   }
 
-  /** 每帧待机动画（不做位移移动，仅肢体微动） */
-  update(elapsed, state) {
+  /**
+   * 每帧动画（不做寻路移动，仅肢体微动）
+   * @param {number} elapsed 运行总秒数
+   * @param {string} state 当前状态
+   * @param {boolean} moving 是否正在移动（走路时摆臂摆腿幅度加大）
+   */
+  update(elapsed, state, moving = false) {
     const p = this.phase;
     // 身体轻微呼吸起伏
     this.torso.position.y = 1.05 + Math.sin(elapsed * 1.4 + p) * 0.012;
     this.head.position.y = 1.56 + Math.sin(elapsed * 1.4 + p + 0.4) * 0.014;
 
-    // 手臂自然摆动（幅度极小）
+    // 手臂摆动：走路时大幅前后摆，站立时自然微摆
     for (const a of this.arms) {
-      a.shoulder.rotation.x = Math.sin(elapsed * 1.1 + p + (a.side > 0 ? 0.6 : 0)) * 0.06;
-      a.shoulder.rotation.z = a.side * (0.06 + Math.sin(elapsed * 0.9 + p) * 0.03);
+      if (moving) {
+        a.shoulder.rotation.x = Math.sin(elapsed * 8 + p + (a.side > 0 ? 0.6 : 0)) * 0.5;
+        a.shoulder.rotation.z = a.side * (0.06 + Math.sin(elapsed * 0.9 + p) * 0.03);
+        a.elbow.rotation.x = -0.3 + Math.sin(elapsed * 8 + p) * 0.2;
+      } else {
+        a.shoulder.rotation.x = Math.sin(elapsed * 1.1 + p + (a.side > 0 ? 0.6 : 0)) * 0.06;
+        a.shoulder.rotation.z = a.side * (0.06 + Math.sin(elapsed * 0.9 + p) * 0.03);
+        a.elbow.rotation.x = 0;
+      }
+    }
+
+    // 腿部摆动：走路时前后迈步，站立时归位
+    for (const l of this.legs) {
+      l.hip.rotation.x = moving
+        ? Math.sin(elapsed * 8 + p + (l.side > 0 ? 0.6 : 0)) * 0.45
+        : 0;
     }
 
     // 状态差异化动画：思考时光环加速旋转、执行时身体微前倾、对话时轻微点头
-    if (state === 'thinking') {
+    if (moving) {
+      // 走路：身体轻微前倾，光环减速旋转
+      this.statusRing.rotation.z += 0.01;
+      this.torso.rotation.x = 0.1;
+      this.head.rotation.x = 0;
+    } else if (state === 'thinking') {
       this.statusRing.rotation.z += 0.05;
       this.head.rotation.x = Math.sin(elapsed * 2.2) * 0.08; // 沉思微点头
+      this.torso.rotation.x = 0;
     } else if (state === 'executing') {
       this.statusRing.rotation.z += 0.03;
       this.torso.rotation.x = 0.08 + Math.sin(elapsed * 3) * 0.02; // 前倾忙绿
