@@ -1,7 +1,7 @@
 /**
- * detailPanel.js — Agent 详情弹窗（V1新增）
- * 交互：点击 3D 场景中的 AI 小人（或右侧状态卡片）弹出深色详情面板，
- *       展示 Agent 名称、岗位、当前状态、当前任务、历史对话记录。
+ * detailPanel.js — Agent 详情弹窗（V1）
+ * 交互：点击 3D 场景中的 AI 员工（或列表卡片“详情”按钮）弹出深色详情面板，
+ *       展示名称、岗位、当前状态、当前任务、历史对话记录。
  * 规范：深色自绘弹窗，禁止浏览器原生白色弹窗（alert/confirm/prompt）。
  */
 
@@ -10,7 +10,7 @@ import { StateMeta } from './config.js';
 export class DetailPanel {
   /**
    * @param {HTMLElement} root #detail-overlay
-   * @param {Map<string, object>} agents AgentManager.agents（用于解析历史记录中的名称）
+   * @param {Map<string, object>} agents Agent 集合（用于解析历史记录中的名称）
    */
   constructor(root, agents) {
     this.root = root;
@@ -19,6 +19,7 @@ export class DetailPanel {
     this.avatar = root.querySelector('#detail-avatar');
     this.nameEl = root.querySelector('#detail-name');
     this.roleEl = root.querySelector('#detail-role');
+    this.slotEl = root.querySelector('#detail-slot');
     this.stateChip = root.querySelector('#detail-state-chip');
     this.taskEl = root.querySelector('#detail-task');
     this.historyEl = root.querySelector('#detail-history');
@@ -48,10 +49,11 @@ export class DetailPanel {
   /** 打开详情面板 */
   open(agent) {
     this.agent = agent;
-    this.avatar.style.background = agent.config.cssColor;
-    this.avatar.textContent = agent.config.initial;
-    this.nameEl.textContent = agent.config.name;
-    this.roleEl.textContent = agent.config.role;
+    this.avatar.style.background = agent.cssColor;
+    this.avatar.textContent = agent.name.slice(0, 1);
+    this.nameEl.textContent = agent.name;
+    this.roleEl.textContent = agent.role;
+    this.slotEl.textContent = `工位：${agent.slot.label}`;
     this.refresh();
     this.root.hidden = false;
   }
@@ -68,7 +70,7 @@ export class DetailPanel {
     // 历史对话记录（用户 ↔ Agent、Agent ↔ Agent）
     const history = a.getHistory();
     if (history.length === 0) {
-      this.historyEl.innerHTML = '<div class="history-empty">暂无对话记录，点击「发起对话」开始交流。</div>';
+      this.historyEl.innerHTML = '<div class="history-empty">暂无对话记录，选中后下发任务或点击「发起对话」开始交流。</div>';
       return;
     }
     this.historyEl.innerHTML = '';
@@ -94,6 +96,6 @@ export class DetailPanel {
   get isOpen() { return !this.root.hidden; }
 
   _name(id) {
-    return this.agents.get(id)?.config.name ?? id;
+    return this.agents.get(id)?.name ?? id;
   }
 }
