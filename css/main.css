@@ -1,0 +1,246 @@
+/* ============================================================
+ * 虚拟AI工作室 · 全局样式（深色科技风）
+ * 布局：中间 3D 视口（flex:1）+ 右侧固定深色日志面板（固定宽度）
+ * ============================================================ */
+
+:root {
+  /* 深色科技面板配色 */
+  --bg-deep: #070b14;        /* 最深的背景（页面底色） */
+  --bg-panel: #0d1322;       /* 面板背景 */
+  --bg-panel-2: #121a2e;     /* 面板次级背景 / 输入框 */
+  --bg-card: #16203a;        /* 卡片背景 */
+  --line: #22304f;           /* 分隔线 / 边框 */
+  --text-1: #e8eefc;         /* 主文字 */
+  --text-2: #9fb0d0;         /* 次文字 */
+  --text-3: #5d6f92;         /* 弱文字 */
+  --accent: #4f8ff7;         /* 主题蓝 */
+  --accent-soft: rgba(79, 143, 247, 0.16);
+  --green: #34d399;
+  --amber: #fbbf24;
+  --purple: #a78bfa;
+  --red: #f87171;
+  --gray: #64748b;
+  --radius: 10px;
+  --panel-width: 384px;      /* 右侧固定面板宽度 */
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* hidden 属性必须优先于组件自身的 display 设置（否则隐藏层仍会拦截点击） */
+[hidden] { display: none !important; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-deep);
+  color: var(--text-1);
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app { display: flex; height: 100vh; height: 100dvh; }
+
+/* ============ 中间主体：3D 视口 ============ */
+#viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 40%, #101a30 0%, #070b14 75%);
+}
+
+#canvas-wrap { position: absolute; inset: 0; }
+#canvas-wrap canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+/* 顶部 HUD */
+#hud {
+  position: absolute;
+  top: 14px; left: 16px; right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: rgba(13, 19, 34, 0.82);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  backdrop-filter: blur(8px);
+  z-index: 20;
+  pointer-events: none;
+}
+#hud > * { pointer-events: auto; }
+
+.hud-brand { display: flex; align-items: center; gap: 10px; }
+.hud-logo {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  box-shadow: 0 0 14px rgba(79, 143, 247, 0.45);
+}
+.hud-title { display: flex; flex-direction: column; line-height: 1.15; }
+.hud-title strong { font-size: 15px; letter-spacing: 0.5px; }
+.hud-title small { font-size: 11px; color: var(--text-3); }
+
+.hud-status { margin-left: auto; }
+
+#hud-actions { display: flex; gap: 8px; }
+
+.hud-btn {
+  padding: 7px 13px;
+  font-size: 12.5px;
+  color: var(--text-1);
+  background: var(--bg-panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.hud-btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+/* 通用小芯片（状态徽标） */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-panel-2);
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gray); }
+.chip-warn { color: var(--amber); border-color: rgba(251, 191, 36, 0.35); }
+.chip-warn .dot { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.chip-ok { color: var(--green); border-color: rgba(52, 211, 153, 0.35); }
+.chip-ok .dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+/* 准星（指针锁定沉浸模式下显示） */
+#crosshair {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 14px; height: 14px;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  pointer-events: none;
+}
+#crosshair::before, #crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(232, 238, 252, 0.85);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+#crosshair::before { left: 6px; top: 0; width: 2px; height: 14px; }
+#crosshair::after { left: 0; top: 6px; width: 14px; height: 2px; }
+
+/* 底部操作提示 */
+#hints {
+  position: absolute;
+  left: 50%; bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-2);
+  background: rgba(13, 19, 34, 0.82);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  backdrop-filter: blur(8px);
+  z-index: 20;
+  pointer-events: none;
+  white-space: nowrap;
+}
+#hints kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-1);
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+}
+
+/* 触屏摇杆 */
+#touch-joystick {
+  position: absolute;
+  left: 26px; bottom: 26px;
+  z-index: 18;
+}
+#joystick-base {
+  width: 110px; height: 110px;
+  border-radius: 50%;
+  background: rgba(13, 19, 34, 0.6);
+  border: 1px solid var(--line);
+  position: relative;
+}
+#joystick-knob {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 46px; height: 46px;
+  margin: -23px 0 0 -23px;
+  border-radius: 50%;
+  background: rgba(79, 143, 247, 0.55);
+  border: 1px solid var(--accent);
+}
+
+/* ============ 右侧固定深色面板 ============ */
+#side-panel {
+  width: var(--panel-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--line);
+  z-index: 30;
+}
+
+/* ============ 浮动功能面板（对话 / 编译器 / 文件） ============ */
+#floating-panels {
+  position: absolute;
+  left: 16px; bottom: 64px;
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: calc(100% - 150px);
+}
+
+/* ============ 全局加载遮罩 ============ */
+#loading-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-deep);
+  z-index: 100;
+  transition: opacity 0.4s;
+}
+#loading-overlay.done { opacity: 0; pointer-events: none; }
+.loading-box { text-align: center; }
+.loading-spinner {
+  width: 42px; height: 42px;
+  margin: 0 auto 14px;
+  border: 3px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-box p { font-size: 13px; color: var(--text-2); }
+
+/* ============ 响应式：窄屏（平板竖屏）收窄右侧面板 ============ */
+@media (max-width: 960px) {
+  :root { --panel-width: 320px; }
+  #hints { display: none; }
+}
+@media (max-width: 640px) {
+  :root { --panel-width: 270px; }
+  .hud-title small { display: none; }
+}
