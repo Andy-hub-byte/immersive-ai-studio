@@ -23,22 +23,28 @@ export const StateMeta = Object.freeze({
 /** Agent 最多数量（V1 计划：最多 10 个） */
 export const MAX_AGENTS = 10;
 
-/** 10 个 Agent 槽位（与场景中的 7 个工位 + 会议区 3 个站位一一对应） */
+/**
+ * 10 个 Agent 槽位（与场景中的 7 个工位 + 会议区 3 个站位一一对应）
+ * 每个槽位包含：
+ *  - home：待命点（无事时驻守的位置，保证不在任何碰撞体内）
+ *  - work：目标办公桌位置（收到任务后移动到此执行）
+ * 行为规则：Agent 绑定槽位待命 → 收到任务移动到 work → 任务完毕返回 home
+ */
 export const AGENT_SLOTS = Object.freeze([
-  // —— 后墙工位排（面向房间内）——
-  { x: -4.5, z: -5.6, yaw: Math.PI,         label: '后墙工位 1' },
-  { x: 0,    z: -5.6, yaw: Math.PI,         label: '后墙工位 2' },
-  { x: 4.5,  z: -5.6, yaw: Math.PI,         label: '后墙工位 3' },
-  // —— 左墙工位（面向右）——
-  { x: -8.7, z: -2.5, yaw: -Math.PI / 2,    label: '左墙工位 1' },
-  { x: -8.7, z: 2.5,  yaw: -Math.PI / 2,    label: '左墙工位 2' },
-  // —— 右墙工位（面向左）——
-  { x: 8.7,  z: -2.5, yaw: Math.PI / 2,     label: '右墙工位 1' },
-  { x: 8.7,  z: 2.5,  yaw: Math.PI / 2,     label: '右墙工位 2' },
-  // —— 会议区站位（面向会议桌）——
-  { x: -2.4, z: 3.4,  yaw: Math.PI * 0.75,  label: '会议区站位 1' },
-  { x: 2.4,  z: 3.4,  yaw: -Math.PI * 0.75, label: '会议区站位 2' },
-  { x: 0,    z: 5.2,  yaw: Math.PI,         label: '会议区站位 3' }
+  // —— 后墙工位排（桌子在 z=-7.2，人在桌前）——
+  { x: -4.5, z: -5.5, yaw: Math.PI,         label: '后墙工位 1', work: { x: -4.5, z: -6.4 } },
+  { x: 0,    z: -5.5, yaw: Math.PI,         label: '后墙工位 2', work: { x: 0,    z: -6.4 } },
+  { x: 4.5,  z: -5.5, yaw: Math.PI,         label: '后墙工位 3', work: { x: 4.5,  z: -6.4 } },
+  // —— 左墙工位（桌子在 x=-8.6，人在桌右侧房间内）——
+  { x: -7.2, z: -2.5, yaw: -Math.PI / 2,    label: '左墙工位 1', work: { x: -7.85, z: -2.5 } },
+  { x: -7.2, z: 2.5,  yaw: -Math.PI / 2,    label: '左墙工位 2', work: { x: -7.85, z: 2.5 } },
+  // —— 右墙工位（桌子在 x=8.6，人在桌左侧房间内）——
+  { x: 7.2,  z: -2.5, yaw: Math.PI / 2,     label: '右墙工位 1', work: { x: 7.85, z: -2.5 } },
+  { x: 7.2,  z: 2.5,  yaw: Math.PI / 2,     label: '右墙工位 2', work: { x: 7.85, z: 2.5 } },
+  // —— 会议区站位（目标位置 = 会议桌旁）——
+  { x: -2.4, z: 3.4,  yaw: Math.PI * 0.75,  label: '会议区站位 1', work: { x: -1.75, z: 2.5 } },
+  { x: 2.4,  z: 3.4,  yaw: -Math.PI * 0.75, label: '会议区站位 2', work: { x: 1.75,  z: 2.5 } },
+  { x: 0,    z: 5.2,  yaw: Math.PI,         label: '会议区站位 3', work: { x: 0,     z: 2.9 } }
 ]);
 
 /** 10 个 Agent 的低饱和度配色（避免霓虹感，轮流分配） */
@@ -63,6 +69,13 @@ export const PLAYER = Object.freeze({
   walkSpeed: 3.2,    // 步行速度 m/s
   runSpeed: 5.6,     // 加速速度 m/s
   mouseSensitivity: 0.0023
+});
+
+/** Agent 移动参数（V1 行为规则：前往目标办公桌 / 返回工位） */
+export const AGENT_MOVE = Object.freeze({
+  speed: 1.5,        // 移动速度 m/s（比玩家慢，显得稳重）
+  radius: 0.32,      // Agent 圆形碰撞半径
+  arriveDist: 0.12   // 到达目标点的判定距离
 });
 
 /** LLM 提供方（V1：默认离线引擎，保证无需联网即可用） */
