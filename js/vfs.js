@@ -1,10 +1,9 @@
 /**
- * vfs.js — 浏览器虚拟文件系统（原有功能）
- * 用途：编码Agent“读取、修改代码”的操作对象。
- * 存储：localStorage 持久化；带修改标记（供代码文件面板展示角标）。
+ * vfs.js — 浏览器虚拟文件系统（V1，纯内存）
+ * 用途：编码岗位 Agent“读取、修改代码”的操作对象。
+ * 约束：遵循“不做本地保存”，文件仅存于内存，刷新页面后重置；
+ *       带修改标记（供代码文件面板展示角标）。
  */
-
-const STORAGE_KEY = 'ai-studio-vfs-v1';
 
 /** 初始种子文件 */
 function seedFiles() {
@@ -19,7 +18,7 @@ function seedFiles() {
 #include <string>
 
 // 虚拟AI工作室 · 示例程序
-// 编码Agent可以读取并修改本文件
+// 编码岗位的同事可以读取并修改本文件
 
 int main() {
     std::vector<std::string> agents = {"planner", "coder", "artist"};
@@ -33,10 +32,10 @@ int main() {
     },
     {
       name: 'planner_notes.md',
-      updatedBy: 'planner',
+      updatedBy: 'system',
       updatedAt: Date.now(),
       content:
-`# 项目规划笔记（规划Agent维护）
+`# 项目规划笔记
 
 ## V1 目标
 - [x] 3D 工作室场景与 Agent 可视化
@@ -44,21 +43,21 @@ int main() {
 - [ ] 多Agent协作链路稳定化
 
 ## 风险
-- 本地大模型首次加载需要下载模型权重
+- 本地大模型首次加载需要下载模型权重（可选通道）
 `
     },
     {
       name: 'creative_brief.md',
-      updatedBy: 'artist',
+      updatedBy: 'system',
       updatedAt: Date.now(),
       content:
-`# 创作简报（创作Agent维护）
+`# 创作简报
 
 ## 品牌调性
 简约、低多边形、深色科技面板。
 
 ## 文案示例
-"让三个AI Agent在虚拟办公室里替你打工。"
+"让一群 AI 同事在虚拟办公室里替你打工。"
 `
     }
   ];
@@ -67,22 +66,13 @@ int main() {
 export class VirtualFS {
   constructor() {
     this.listeners = new Set();
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      this.files = raw ? JSON.parse(raw) : seedFiles();
-    } catch {
-      this.files = seedFiles();
-    }
-    if (!Array.isArray(this.files) || this.files.length === 0) this.files = seedFiles();
-  }
-
-  _persist() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(this.files)); } catch { /* 存储满时静默 */ }
-    this.listeners.forEach((cb) => cb());
+    this.files = seedFiles();
   }
 
   /** 订阅变更（代码文件面板刷新用） */
   subscribe(cb) { this.listeners.add(cb); return () => this.listeners.delete(cb); }
+
+  _notify() { this.listeners.forEach((cb) => cb()); }
 
   list() { return this.files.map((f) => ({ ...f })); }
 
@@ -94,7 +84,7 @@ export class VirtualFS {
     return f.content;
   }
 
-  /** 写入/新建文件；author 标记修改方（如 coder） */
+  /** 写入/新建文件；author 标记修改方（员工姓名或 user） */
   write(name, content, author = 'user') {
     let f = this.get(name);
     if (!f) {
@@ -105,7 +95,7 @@ export class VirtualFS {
       f.updatedBy = author;
       f.updatedAt = Date.now();
     }
-    this._persist();
+    this._notify();
     return { ...f };
   }
 }
