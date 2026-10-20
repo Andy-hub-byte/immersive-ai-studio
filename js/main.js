@@ -47,11 +47,13 @@ const logPanel = new LogPanel({
     onRemove: (agent) => agentManager.removeAgent(agent.id),
     // 添加 Agent（返回 null 表示失败：超出上限或重名）
     onAdd: (name, role) => agentManager.addAgent({ name, role }),
-    // 下发任务指令
+    // 下发任务指令（私聊：仅送达选中的 Agent）
     onSend: (agentId, text) => {
       const agent = agentsMap.get(agentId);
       if (agent) agent.respond(text, { from: 'user', mode: 'task' });
-    }
+    },
+    // 全体广播：发送给所有在岗 Agent，各自认领匹配岗位的任务
+    onBroadcast: (text) => agentManager.broadcast(text)
   }
 });
 
