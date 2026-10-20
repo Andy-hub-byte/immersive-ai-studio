@@ -102,7 +102,7 @@
         <div id="log-stream" class="log-stream" role="log" aria-live="polite"></div>
       </section>
 
-      <!-- 指令输入：选择Agent并下发任务 -->
+      <!-- 指令输入：选择Agent私聊发送 / 或全体广播 -->
       <div class="side-input">
         <div class="side-input-row">
           <select id="chat-target" aria-label="选择Agent">
@@ -111,7 +111,8 @@
         </div>
         <div class="side-input-row">
           <input id="chat-input" type="text" placeholder="输入指令，Enter 发送" autocomplete="off" />
-          <button id="chat-send" class="send-btn" type="button">发送</button>
+          <button id="chat-send" class="send-btn" type="button">私聊发送</button>
+          <button id="chat-broadcast" class="broadcast-btn" type="button" title="发送给场景内所有在岗Agent，各自认领匹配岗位的任务">全体广播</button>
         </div>
       </div>
     </aside>
@@ -267,5 +268,46 @@
   </div>
 
   <script type="module" src="./js/main.js"></script>
+
+  <script>
+    /* ============================================================
+     * 运行环境检测（内联脚本，先于 ES Module 执行）
+     * 本项目基于 ES Modules，必须通过 HTTP 服务访问；
+     * 直接双击 index.html（file:// 协议）会被浏览器安全策略拦截。
+     * ============================================================ */
+    (function () {
+      function showNotice(html) {
+        document.addEventListener('DOMContentLoaded', function () {
+          var box = document.querySelector('.loading-box');
+          if (box) box.innerHTML = '<div style="max-width:460px;text-align:left;line-height:1.9;font-size:13px;color:#9fb0d0">' + html + '</div>';
+        });
+      }
+      // 情况一：file:// 协议直开（ES Module 必然被拦截）
+      if (location.protocol === 'file:') {
+        showNotice(
+          '<strong style="color:#fbbf24;font-size:15px">请不要直接双击打开 index.html</strong><br>' +
+          '本项目使用 ES Modules 技术，浏览器安全策略要求通过本地服务器访问。<br><br>' +
+          '<b style="color:#e8eefc">方法一</b>：在项目文件夹打开终端 / 命令行，运行<br>' +
+          '<code style="color:#4f8ff7">python3 -m http.server 8080</code><br>' +
+          '然后浏览器访问 <code style="color:#4f8ff7">http://localhost:8080</code><br><br>' +
+          '<b style="color:#e8eefc">方法二</b>：直接打开在线演示<br>' +
+          '<a href="https://andy-hub-byte.github.io/immersive-ai-studio/" style="color:#4f8ff7">https://andy-hub-byte.github.io/immersive-ai-studio/</a>'
+        );
+        return;
+      }
+      // 情况二：兜底——8 秒后仍未初始化成功（服务器未启动 / 文件缺失）
+      setTimeout(function () {
+        if (!window.__studio) {
+          showNotice(
+            '<strong style="color:#fbbf24;font-size:15px">3D 工作室加载失败</strong><br>' +
+            '可能原因：本地服务器未启动，或项目文件不完整。<br>' +
+            '请在项目目录运行 <code style="color:#4f8ff7">python3 -m http.server 8080</code>，<br>' +
+            '然后访问 <code style="color:#4f8ff7">http://localhost:8080</code>；<br>' +
+            '或使用在线演示：<a href="https://andy-hub-byte.github.io/immersive-ai-studio/" style="color:#4f8ff7">GitHub Pages 在线版</a>'
+          );
+        }
+      }, 8000);
+    })();
+  </script>
 </body>
 </html>
