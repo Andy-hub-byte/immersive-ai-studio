@@ -6,7 +6,8 @@
  *  2) 流式日志：流式输出每个 Agent 的思考内容（打字机光标）、
  *     Agent 互相发送的消息记录（发送方 → 接收方）、状态与执行动作；
  *     支持 全部/思考/消息/系统 分类过滤、自动滚动、清屏。
- *  3) 指令输入：选择目标 Agent 后输入指令，Enter 下发任务。
+ *  3) 指令输入：选择目标 Agent 后输入指令，Enter 私聊发送；
+ *     或点击「全体广播」发送给所有在岗 Agent，由各 Agent 自主认领匹配岗位的任务。
  */
 
 const MAX_ENTRIES = 400; // DOM 日志条数上限，防止长跑内存膨胀
@@ -35,6 +36,7 @@ export class LogPanel {
     this.targetSel = root.querySelector('#chat-target');
     this.input = root.querySelector('#chat-input');
     this.sendBtn = root.querySelector('#chat-send');
+    this.broadcastBtn = root.querySelector('#chat-broadcast');
 
     this.filter = 'all';
     this.streams = new Map(); // streamId -> {textEl, cursor, full}
@@ -66,17 +68,26 @@ export class LogPanel {
     this.addBtn.addEventListener('click', () => this._submitAdd());
     this.addName.addEventListener('keydown', (e) => { if (e.key === 'Enter') this._submitAdd(); });
     this.addRole.addEventListener('keydown', (e) => { if (e.key === 'Enter') this._submitAdd(); });
-    // 指令发送
+    // 指令发送（私聊：仅送达选中的 Agent）
     const fire = () => {
       const text = this.input.value.trim();
       if (!text) return;
       const target = this.targetSel.value;
-      if (!target) { this.addSystem('请先选中一个 Agent（点击 3D 员工 / 列表卡片）。'); return; }
+      if (!target) { this.addSystem('请先选中一个 Agent（点击 3D 员工 / 列表卡片），或使用「全体广播」。'); return; }
       this.input.value = '';
       this.handlers.onSend(target, text);
     };
     this.sendBtn.addEventListener('click', fire);
     this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter') fire(); });
+
+    // 全体广播（发送给场景内所有在岗 Agent，各自认领匹配岗位的任务）
+    const fireBroadcast = () => {
+      const text = this.input.value.trim();
+      if (!text) { this.addSystem('请输入广播内容后再发送。'); return; }
+      this.input.value = '';
+      this.handlers.onBroadcast(text);
+    };
+    this.broadcastBtn.addEventListener('click', fireBroadcast);
   }
 
   _submitAdd() {
