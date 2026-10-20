@@ -322,40 +322,135 @@
 .float-head-actions { margin-left: auto; display: flex; gap: 6px; }
 .float-head .side-icon-btn { margin-left: 0; }
 
-/* AI 连接通道切换（离线引擎 / WebLLM / 在线API） */
-.ai-provider-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+/* AI 运行模式选择（演示模式 / WebLLM 本地推理 双卡片） */
+.ai-mode-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
   padding: 12px;
   border-bottom: 1px solid var(--line);
 }
-.ai-radio {
+@media (max-width: 520px) {
+  .ai-mode-cards { grid-template-columns: 1fr; }
+}
+.ai-mode-card {
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  padding: 8px 10px;
+  padding: 10px;
+  text-align: left;
   background: var(--bg-panel-2);
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 10px;
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  font-family: inherit;
 }
-.ai-radio:hover { border-color: var(--accent); }
-.ai-radio input { margin-top: 3px; accent-color: var(--accent); flex: none; }
-.ai-radio span { display: flex; flex-direction: column; gap: 2px; }
-.ai-radio strong { font-size: 12.5px; color: var(--text-1); }
-.ai-radio small { font-size: 10.5px; color: var(--text-3); line-height: 1.4; }
-.ai-radio:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
-
-/* 在线 API 配置表单 */
-.api-config {
+.ai-mode-card:hover { border-color: var(--accent); }
+.ai-mode-card.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent), 0 4px 14px -6px var(--accent);
+}
+.ai-mode-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+  background: var(--bg-panel-3, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+}
+.ai-mode-card.active .ai-mode-icon { background: rgba(79, 143, 247, 0.22); }
+.ai-mode-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ai-mode-body strong {
   display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--text-1);
+}
+.ai-mode-badge {
+  padding: 1px 6px;
+  font-size: 9.5px;
+  font-style: normal;
+  font-weight: 600;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.ai-mode-badge.alt {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.35);
+}
+.ai-mode-body small { font-size: 10.5px; color: var(--text-3); line-height: 1.5; }
+.ai-mode-check {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.15s, transform 0.15s;
+}
+.ai-mode-card.active .ai-mode-check { opacity: 1; transform: scale(1); }
+
+/* WebLLM 情境提示条（选中本地推理模式时滑入） */
+.ai-mode-tip {
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  border-bottom: 1px solid rgba(251, 191, 36, 0.22);
+  animation: tipIn 0.22s ease-out;
+}
+.ai-mode-tip b { font-weight: 700; }
+.ai-mode-tip.warn {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+  border-bottom-color: rgba(248, 113, 113, 0.3);
+}
+@keyframes tipIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 高级选项：在线 API（折叠收纳） */
+.ai-advanced {
   border-bottom: 1px solid var(--line);
 }
+.ai-advanced > summary {
+  padding: 10px 12px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.ai-advanced > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--text-3);
+  transition: transform 0.15s;
+}
+.ai-advanced[open] > summary::before { transform: rotate(90deg); }
+.ai-advanced > summary:hover { color: var(--text-1); }
+.ai-adv-current {
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.ai-advanced .api-row:first-of-type { margin-top: 2px; }
 .api-row { display: flex; gap: 8px; }
 .api-row input, .api-row select {
   flex: 1;
