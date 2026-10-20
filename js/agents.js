@@ -32,6 +32,18 @@ const SYSTEM_PROMPTS = {
   generic: '你是虚拟AI工作室的一名 AI 员工，请根据岗位职责专业、简洁地完成任务。需要同事协作时，可输出 [TO:对方名字] 具体指令。'
 };
 
+/**
+ * 全体广播任务的岗位认领关键词（V1 交互规则）
+ * 广播下发后，各 Agent 按自身岗位判断是否认领：
+ * 匹配则认领执行；不匹配则留在工位待命，不参与、不重复执行。
+ */
+const CLAIM_KEYWORDS = Object.freeze({
+  planner: /规划|拆解|方案|计划|排期|需求|管理|组织|协调|评审/,
+  coder:   /实现|开发|编写|写个|写一个|代码|程序|函数|算法|排序|计算|修改|修复|优化|debug|bug|编译|接口|脚本/,
+  artist:  /文案|创意|设计|美术|视觉|海报|宣传|品牌|起名|命名|润色|slogan/,
+  generic: /整理|统计|汇总|检查|记录|其他|帮忙|协助/
+});
+
 let _idSeq = 0; // Agent 自增 ID
 
 /** 角度插值（处理 -π/π 环绕，用于移动转向平滑） */
@@ -68,6 +80,7 @@ export class Agent {
     // —— V1 行为规则：移动相关状态 ——
     this.moveTarget = null;   // 当前移动目标 {x, z}，null 表示未在移动
     this._moveResolve = null; // 移动完成Promise的resolve（由帧更新触发）
+    this.queue = [];          // 指令队列：忙碌时新指令排队，当前任务完成后自动处理
   }
 
   get stateLabel() { return StateMeta[this.state].label; }
@@ -95,17 +108,20 @@ export class Agent {
   getHistory() { return [...this.history].sort((a, b) => a.time - b.time); }
 
   /* ---------- 主流程：响应用户指令 / 其他Agent消息 ---------- */
-  async respond(text, { from = 'user', mode = 'task', depth = 0 } = {}) {
+  async respond(text, { from = 'user', mode = 'task', depth = 0, broadcast = false } = {}) {
+    // 忙碌中：指令加入队列，当前任务完成后自动按顺序处理
+    // （支持用户在任务执行中途随时私聊追加/修改细节，不必重新向全体下发）
     if (this.busy) {
-      this.logPanel.addSystem(`${this.name} 正忙，已忽略本次输入。`);
+      this.queue.push({ text, from, mode, depth, broadcast });
+      this.logPanel.addSystem(`「${this.name}」正在执行任务，指令已排队（第 ${this.queue.length} 位），完成当前任务后自动处理。`);
       return;
     }
     this.busy = true;
     try {
-      // 1. 记录输入
+      // 1. 记录输入（广播消息也写入历史，便于详情面板追溯）
       this.pushHistory({ from, to: this.id, text, time: Date.now() });
       if (from === 'user') {
-        this.logPanel.addMessage('你', this.name, text, 'user', this.id);
+        this.logPanel.addMessage('你', broadcast ? '全体Agent' : this.name, text, 'user', broadcast ? null : this.id);
       }
 
       this._pendingTask = text.length > 40 ? text.slice(0, 40) + '…' : text;
@@ -155,6 +171,12 @@ export class Agent {
     } finally {
       this.busy = false;
       this._pendingTask = '';
+      // 9. 队列中还有排队的指令 → 自动处理下一条（执行中途追加的私聊不丢失）
+      if (this.queue.length > 0) {
+        const next = this.queue.shift();
+        this.respond(next.text, { from: next.from, mode: next.mode, depth: next.depth, broadcast: next.broadcast })
+          .catch((e) => this.logPanel.addSystem(`「${this.name}」处理排队指令出错：${e?.message || e}`));
+      }
     }
   }
 
@@ -491,6 +513,49 @@ export class AgentManager {
     this.logPanel.addMessage(fromAgent.name, toAgent.name, text, fromAgent.id, toAgent.id);
     // 接收方进入处理流程（转派来的消息按任务处理）
     toAgent.respond(text, { from: fromAgent.id, mode: 'task', depth });
+  }
+
+  /**
+   * 全体广播（V1 交互规则：两种下发模式之一）
+   * 消息发送给场景内所有在岗 Agent，各 Agent 自主协商认领：
+   *  - 岗位关键词匹配且同岗位未被认领 → 认领并执行（走完整任务流程）
+   *  - 同岗位已有同事认领 → 留在工位待命，不重复执行
+   *  - 不属于自身职责范围 → 留在工位待命，不参与
+   *  - 正忙的 Agent → 不参与本次广播（其排队队列不受影响）
+   */
+  broadcast(text) {
+    const total = this.agents.size;
+    if (total === 0) { this.logPanel.addSystem('当前场景内没有在岗 Agent，广播无效。'); return; }
+    this.logPanel.addMessage('你', '全体Agent', text, 'user', null);
+    this.logPanel.addSystem(`广播已发送给 ${total} 名在岗 Agent，各员工开始自主认领…`);
+
+    // 先统计：本次广播有哪些岗位原型关键词匹配（用于同岗位去重）
+    const matchedArchs = new Set();
+    for (const a of this.agents.values()) {
+      const kw = CLAIM_KEYWORDS[a.archetype];
+      if (kw && kw.test(text)) matchedArchs.add(a.archetype);
+    }
+    // 通用岗兜底：没有任何专门岗位匹配时，通用岗认领剩余任务
+    const genericFallback = matchedArchs.size === 0 && [...this.agents.values()].some((a) => a.archetype === 'generic');
+
+    const claimed = new Set(); // 已认领的岗位原型
+    for (const agent of [...this.agents.values()]) {
+      const kw = CLAIM_KEYWORDS[agent.archetype];
+      const isMatch = genericFallback ? agent.archetype === 'generic' : !!(kw && kw.test(text));
+      if (agent.busy) {
+        if (isMatch) this.logPanel.addSystem(`「${agent.name}」岗位匹配但正在执行其他任务，本次广播不参与。`);
+        continue;
+      }
+      if (isMatch && !claimed.has(agent.archetype)) {
+        claimed.add(agent.archetype);
+        this.logPanel.addAction(agent, `认领广播任务：「${text.length > 30 ? text.slice(0, 30) + '…' : text}」`);
+        agent.respond(text, { from: 'user', mode: 'task', broadcast: true });
+      } else if (isMatch && claimed.has(agent.archetype)) {
+        this.logPanel.addSystem(`「${agent.name}」同岗位已有同事认领，本人在工位待命，不重复执行。`);
+      } else {
+        this.logPanel.addSystem(`「${agent.name}」认为该任务不属于自身职责范围，留在工位待命。`);
+      }
+    }
   }
 
   /* ---------- 射线拾取（点击 / 悬停 Agent） ---------- */
