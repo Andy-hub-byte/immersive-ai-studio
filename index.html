@@ -119,7 +119,7 @@
 
     <!-- ============ 浮动功能面板挂载区（AI连接 / C++实验室 / 文件） ============ -->
     <div id="floating-panels" hidden>
-      <!-- AI 连接面板：离线引擎（默认）/ WebLLM 本地模型 / 在线API 三通道 -->
+      <!-- AI 连接面板：演示模式（默认）/ WebLLM 本地推理 / 高级在线API -->
       <section class="float-panel" id="panel-chat" hidden>
         <header class="float-head">
           <strong>AI 连接设置</strong>
@@ -128,35 +128,45 @@
           </div>
         </header>
 
-        <!-- 通道切换 -->
-        <div class="ai-provider-bar">
-          <label class="ai-radio">
-            <input type="radio" name="ai-provider" value="offline" checked />
-            <span><strong>离线AI引擎</strong><small>内置规则引擎，无需联网，开箱即用（默认）</small></span>
-          </label>
-          <label class="ai-radio">
-            <input type="radio" name="ai-provider" value="webllm" />
-            <span><strong>本地大模型 WebLLM</strong><small>浏览器内 WebGPU 推理，首次需下载模型权重</small></span>
-          </label>
-          <label class="ai-radio">
-            <input type="radio" name="ai-provider" value="api" />
-            <span><strong>在线 API</strong><small>OpenAI 兼容接口，填写地址/密钥/模型名即用</small></span>
-          </label>
+        <!-- AI 运行模式选择：演示模式 / WebLLM 本地推理（双卡片） -->
+        <div class="ai-mode-cards" id="ai-mode-cards">
+          <button type="button" class="ai-mode-card" data-provider="offline">
+            <span class="ai-mode-icon">⚡</span>
+            <span class="ai-mode-body">
+              <strong>演示模式<em class="ai-mode-badge">推荐初次体验</em></strong>
+              <small>即时体验全部交互，无需下载模型</small>
+            </span>
+            <span class="ai-mode-check" aria-hidden="true">✓</span>
+          </button>
+          <button type="button" class="ai-mode-card" data-provider="webllm">
+            <span class="ai-mode-icon">🧠</span>
+            <span class="ai-mode-body">
+              <strong>WebLLM 本地推理<em class="ai-mode-badge alt">真实 AI</em></strong>
+              <small>加载 Qwen3-1.7B 模型，AI 在你的设备本地运行，无费用、无密钥，首次需要下载模型文件</small>
+            </span>
+            <span class="ai-mode-check" aria-hidden="true">✓</span>
+          </button>
         </div>
 
+        <!-- WebLLM 情境提示：选中本地推理模式 / 点击加载模型时显示 -->
+        <p class="ai-mode-tip" id="ai-mode-tip" hidden>
+          <b>提示</b>：WebLLM 需要 WebGPU 支持（Chrome / Edge 等新版浏览器）；平板运行时轻微发热；首次下载模型建议连接 WiFi。
+        </p>
+
         <!-- WebLLM 模型加载 -->
-        <div class="model-bar" id="webllm-bar">
+        <div class="model-bar" id="webllm-bar" hidden>
           <select id="model-select" aria-label="选择模型">
-            <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC">Qwen2.5-1.5B（约1GB·推荐）</option>
-            <option value="Qwen2.5-3B-Instruct-q4f16_1-MLC">Qwen2.5-3B（约2GB）</option>
-            <option value="Llama-3.2-1B-Instruct-q4f32_1-MLC">Llama-3.2-1B（约1.3GB）</option>
+            <option value="Qwen3-1.7B-q4f16_1-MLC">Qwen3-1.7B（约 1.1GB·推荐）</option>
+            <option value="Qwen3-4B-q4f16_1-MLC">Qwen3-4B（约 2.5GB·更聪明）</option>
+            <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC">Qwen2.5-1.5B（约 1GB·旧设备兼容）</option>
           </select>
           <button class="side-icon-btn" id="btn-load-model" type="button">加载模型</button>
           <div id="model-progress" class="model-progress" hidden><div id="model-progress-bar"></div></div>
         </div>
 
-        <!-- 在线 API 配置 -->
-        <div class="api-config" id="api-config" hidden>
+        <!-- 高级选项：在线 API（折叠收纳，不干扰主选择） -->
+        <details class="ai-advanced" id="api-config">
+          <summary>高级选项：在线 API（OpenAI 兼容接口）<span class="ai-adv-current" id="api-current" hidden>· 当前模式</span></summary>
           <div class="api-row">
             <select id="api-preset" aria-label="API预设"></select>
           </div>
@@ -170,9 +180,10 @@
             <input id="api-model" type="text" placeholder="模型名，如 deepseek-chat" autocomplete="off" />
           </div>
           <div class="api-row api-actions">
+            <button class="side-icon-btn" id="btn-use-api" type="button">使用在线 API</button>
             <button class="side-icon-btn primary" id="btn-save-api" type="button">保存配置</button>
           </div>
-        </div>
+        </details>
 
         <!-- 测试当前 AI 通道连接（对三种通道均可用） -->
         <div class="ai-test-bar">
