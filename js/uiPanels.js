@@ -1,8 +1,8 @@
 /**
  * uiPanels.js — 浮动功能面板控制器
  * 包含三个基础功能面板：
- *  1) AI 连接面板：离线引擎（默认）/ WebLLM 本地大模型 / 在线API 三通道，
- *     支持保存配置与"测试连接"，保证 AI 一定能连接上；
+ *  1) AI 连接面板：演示模式（默认，离线规则引擎）/ WebLLM 本地大模型（WebGPU）/
+ *     在线 API（OpenAI 兼容，高级选项折叠收纳），支持保存配置与"测试连接"；
  *  2) C++ 编程实验室：代码输入 + 运行 + 控制台输出（默认离线壳子，可勾选联网真实编译）；
  *  3) 代码文件面板（虚拟文件系统，编码Agent的修改会实时同步）。
  */
@@ -39,7 +39,7 @@ class FloatPanelHost {
   }
 }
 
-/* =--------------- AI 连接面板（三通道） --------------- */
+/* =--------------- AI 连接面板（演示模式 / WebLLM / 在线API） --------------- */
 export class ChatPanel {
   constructor(host) {
     this.panel = host.panels.chat;
@@ -47,20 +47,24 @@ export class ChatPanel {
     this.input = this.panel.querySelector('#chat-llm-input');
     this.sendBtn = this.panel.querySelector('#chat-llm-send');
 
-    // 通道切换单选
-    this.radios = [...this.panel.querySelectorAll('input[name="ai-provider"]')];
+    // 运行模式卡片（演示 / WebLLM）
+    this.cards = [...this.panel.querySelectorAll('.ai-mode-card')];
+    // WebLLM 情境提示条
+    this.tip = this.panel.querySelector('#ai-mode-tip');
     // WebLLM 模型加载
     this.loadBtn = this.panel.querySelector('#btn-load-model');
     this.modelSelect = this.panel.querySelector('#model-select');
     this.progress = this.panel.querySelector('#model-progress');
     this.progressBar = this.panel.querySelector('#model-progress-bar');
-    // 在线 API 配置
+    // 在线 API 配置（高级选项折叠区）
     this.apiBox = this.panel.querySelector('#api-config');
+    this.apiCurrent = this.panel.querySelector('#api-current');
     this.apiPreset = this.panel.querySelector('#api-preset');
     this.apiBase = this.panel.querySelector('#api-base');
     this.apiKey = this.panel.querySelector('#api-key');
     this.apiModel = this.panel.querySelector('#api-model');
     this.saveApiBtn = this.panel.querySelector('#btn-save-api');
+    this.useApiBtn = this.panel.querySelector('#btn-use-api');
     this.testApiBtn = this.panel.querySelector('#btn-test-api');
 
     this._bind();
@@ -68,12 +72,11 @@ export class ChatPanel {
   }
 
   _bind() {
-    // 通道切换
-    this.radios.forEach((r) => r.addEventListener('change', () => {
-      if (!r.checked) return;
-      llm.setProvider(r.value);
+    // 模式卡片切换
+    this.cards.forEach((c) => c.addEventListener('click', () => {
+      llm.setProvider(c.dataset.provider);
       this._syncProviderUI();
-      this.addMsg('ai', `已切换 AI 通道：${llm.statusText()}`);
+      this.addMsg('ai', `已切换 AI 运行模式：${llm.statusText()}`);
     }));
     // WebLLM 加载
     this.loadBtn.addEventListener('click', () => this.loadModel());
@@ -87,24 +90,31 @@ export class ChatPanel {
     });
     // 保存 / 测试连接
     this.saveApiBtn.addEventListener('click', () => this.saveApi());
+    this.useApiBtn.addEventListener('click', () => this.switchToApi());
     this.testApiBtn.addEventListener('click', () => this.testConnection());
     // 直接对话
     this.sendBtn.addEventListener('click', () => this.send());
     this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.send(); });
   }
 
-  /** 按当前通道显示/隐藏对应配置区 */
+  /** 按当前模式同步 UI：卡片选中态 / 提示条 / 模型区 / 高级选项展开态 */
   _syncProviderUI() {
     const p = llm.provider;
-    this.radios.forEach((r) => { r.checked = r.value === p; });
-    this.panel.querySelector('#webllm-bar').hidden = p !== LLM_PROVIDERS.WEBLLM;
-    this.apiBox.hidden = p !== LLM_PROVIDERS.API;
-    // 回显已保存的 API 配置
+    this.cards.forEach((c) => c.classList.toggle('active', c.dataset.provider === p));
+    // WebLLM 模式：显示情境提示 + 模型加载区；否则隐藏
+    const webllm = p === LLM_PROVIDERS.WEBLLM;
+    this.tip.hidden = !webllm;
+    this.panel.querySelector('#webllm-bar').hidden = !webllm;
+    // 高级选项：切到在线 API 时自动展开，方便直接填写
+    this.apiBox.open = p === LLM_PROVIDERS.API;
+    this.apiCurrent.hidden = p !== LLM_PROVIDERS.API;
     if (p === LLM_PROVIDERS.API) {
       this.apiBase.value = llm.api.baseUrl;
       this.apiKey.value = llm.api.apiKey;
       this.apiModel.value = llm.api.model;
     }
+    // 浏览器不支持 WebGPU 时，提示条变红预警
+    this.tip.classList.toggle('warn', webllm && !llm.webgpuSupported);
   }
 
   addMsg(role, text) {
@@ -131,7 +141,7 @@ export class ChatPanel {
     this.input.value = '';
 
     if (llm.provider === LLM_PROVIDERS.WEBLLM && !llm.ready) {
-      this.addMsg('ai', '本地模型尚未加载。请点击「加载模型」下载并启动（需要支持 WebGPU 的浏览器，如 Chrome 113+）。未加载时 Agent 会自动使用离线AI引擎。');
+      this.addMsg('ai', '本地模型尚未加载。请点击「加载模型」下载并启动（需要支持 WebGPU 的浏览器，如 Chrome 113+）。未加载时 Agent 会自动使用演示模式（离线引擎）。');
       return;
     }
     const body = this.addMsg('ai', '…');
@@ -150,6 +160,12 @@ export class ChatPanel {
 
   async loadModel() {
     const model = this.modelSelect.value;
+    // 点进来加载模型时，先显示提示文字（WebGPU / 发热 / WiFi）
+    this.addMsg('ai', '提示：WebLLM 需要 WebGPU 支持（Chrome / Edge 等新版浏览器）；平板运行时轻微发热；首次下载模型建议连接 WiFi。');
+    if (!llm.webgpuSupported) {
+      this.addMsg('ai', '当前浏览器不支持 WebGPU，无法加载本地模型。可继续使用演示模式，或展开「高级选项」配置在线 API。');
+      return;
+    }
     this.loadBtn.disabled = true;
     this.progress.hidden = false;
     this.progressBar.style.width = '0%';
@@ -160,7 +176,7 @@ export class ChatPanel {
       });
       this.addMsg('ai', `模型 ${model} 已就绪，工作室 Agent 将自动改用它推理。`);
     } catch (e) {
-      this.addMsg('ai', '加载失败：' + (e?.message || e) + '。可继续使用离线AI引擎体验平台功能。');
+      this.addMsg('ai', '加载失败：' + (e?.message || e) + '。可继续使用演示模式体验平台功能。');
     } finally {
       this.loadBtn.disabled = false;
       this.loadBtn.textContent = '加载模型';
@@ -176,8 +192,17 @@ export class ChatPanel {
       model: this.apiModel.value
     });
     this.addMsg('ai', llm.api.apiKey
-      ? `在线 API 配置已保存：${llm.api.model}。可点击「测试连接」验证。`
+      ? `在线 API 配置已保存：${llm.api.model}，已自动切换为在线 API 模式。可点击「测试连接」验证。`
       : '配置已保存，但 API Key 为空，请填写后再测试。');
+    // 配置完整即自动切换，省去用户再找入口
+    if (llm.api.apiKey && llm.api.baseUrl && llm.api.model) this.switchToApi();
+  }
+
+  /** 显式切换到在线 API 模式 */
+  switchToApi() {
+    llm.setProvider(LLM_PROVIDERS.API);
+    this._syncProviderUI();
+    this.addMsg('ai', `已切换 AI 运行模式：${llm.statusText()}`);
   }
 
   /** 测试当前 AI 通道连接 */
