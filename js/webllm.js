@@ -56,7 +56,7 @@ export class LLMService {
   statusText() {
     if (this.provider === LLM_PROVIDERS.WEBLLM) return this.engine ? `本地模型就绪（${this.modelId}）` : '本地模型未加载';
     if (this.provider === LLM_PROVIDERS.API) return this.api.apiKey ? `在线API：${this.api.model}` : '在线API未配置';
-    return '离线AI引擎（默认）';
+    return '演示模式（离线规则引擎）';
   }
 
   /** 切换通道 */
@@ -143,7 +143,12 @@ export class LLMService {
   async chat(messages, onChunk = () => {}) {
     try {
       if (this.provider === LLM_PROVIDERS.WEBLLM && this.engine) {
-        const chunks = await this.engine.chat.completions.create({ messages, stream: true, temperature: 0.7 });
+        // Qwen3 系列默认开启"思考模式"，浏览器推理慢且会刷屏推理 token，
+        // 工作室场景需要即时简短回复，显式关闭思考模式。
+        const extra = this.modelId?.startsWith('Qwen3') ? { enable_thinking: false } : undefined;
+        const chunks = await this.engine.chat.completions.create({
+          messages, stream: true, temperature: 0.7, ...(extra ? { extra_body: extra } : {})
+        });
         let full = '';
         for await (const chunk of chunks) {
           const delta = chunk.choices?.[0]?.delta?.content || '';
