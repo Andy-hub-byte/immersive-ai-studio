@@ -85,11 +85,11 @@ export const LLM_PROVIDERS = Object.freeze({
   API: 'api'          // 在线 API（OpenAI 兼容，需用户配置密钥）
 });
 
-/** WebLLM 可选模型列表（原有功能：本地大模型） */
+/** WebLLM 可选模型列表（本地大模型，均为 MLC 官方预编译权重） */
 export const LLM_MODELS = Object.freeze([
-  'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
-  'Qwen2.5-3B-Instruct-q4f16_1-MLC',
-  'Llama-3.2-1B-Instruct-q4f32_1-MLC'
+  'Qwen3-1.7B-q4f16_1-MLC',
+  'Qwen3-4B-q4f16_1-MLC',
+  'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'
 ]);
 
 /** 在线 API 预设（OpenAI 兼容接口，填 Key 即用） */
