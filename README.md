@@ -11,7 +11,7 @@
 
 This project is a browser-native, tablet-first immersive 3D creation platform. Users enter a virtual studio as a first-person character, create customized AI agent teams, assign tasks, and observe intelligent agents working independently.
 
-The platform supports up to 10 AI agents, each with an independent name, role and status logic. Agents stand by at their own workstations, walk to the target desk after receiving a task, stop automatically when encountering obstacles (no wall clipping), and return to their stations after completing work.
+The platform supports up to 10 AI agents, each with an independent name, role and status logic. Agents stand by at their own workstations, walk to the target desk after receiving a task, stop automatically when encountering obstacles (no wall clipping), and return to their stations after completing work. Two dispatch modes are supported: **Broadcast** (all on-duty agents self-negotiate and claim only role-matching tasks) and **Private Chat** (the message reaches only the selected agent).
 
 A built-in C++ coding lab provides an editor, a run button and a console output — offline by default, with optional online real compilation. The whole project runs purely on the web, no installation, no API key required, accessible on all devices.
 
@@ -47,6 +47,7 @@ A built-in C++ coding lab provides an editor, a run button and a console output 
 1. **绑定工位待命**：每个 Agent 绑定专属工位，无事时在自己工位原地待命（仅呼吸与状态动画，不离开工位）。
 2. **任务移动闭环**：收到用户下发任务后，移动到目标办公桌位置执行；移动途中如果碰到障碍物就自动停下，禁止穿墙；任务执行完毕，自动回到自己的工位原地待命。
 3. **数量与身份**：系统上限最多支持 10 个 Agent，场景初始化默认只加载 3 个，用户可手动新增至 10 个；每个 Agent 拥有独立名称、岗位、任务状态。
+4. **两种指令下发模式**：**全体广播**（消息发送给所有在岗 Agent，各自协商认领匹配自身岗位的任务，不越权、不重复执行，其余留在工位待命）；**单独私聊**（侧边栏选中指定 Agent，消息仅送达该 Agent，其余员工保持待命）。执行中途可自由切换模式，忙碌 Agent 的新指令自动排队、不丢失。
 
 ### 3. 内置 C++ 编程实验室
 
@@ -89,7 +90,7 @@ A built-in C++ coding lab provides an editor, a run button and a console output 
 
 | 版本 | 状态 | 内容 |
 | --- | --- | --- |
-| **V1** | ✅ 已完成 | 基础 3D 场景搭建、第一人称漫游与碰撞、AI 智能体核心交互（四状态 / 详情面板 / 流式日志）、**Agent 移动行为规则**（前往目标办公桌 / 遇障停止 / 完工返回工位）、C++ 编程实验室基础壳子、AI 三通道连接 |
+| **V1** | ✅ 已完成 | 基础 3D 场景搭建、第一人称漫游与碰撞、AI 智能体核心交互（四状态 / 详情面板 / 流式日志）、**Agent 移动行为规则**（前往目标办公桌 / 遇障停止 / 完工返回工位）、**两种指令下发模式**（全体广播认领 / 单独私聊 / 忙碌排队）、C++ 编程实验室基础壳子、AI 三通道连接 |
 | **V2** | 规划中 | 完整编程实验室落地、C++ 在线编译完善、编码 AI 辅助排查 BUG 增强 |
 | **V3** | 规划中 | 可视化拖拽式 3D 场景编辑器，自定义搭建专属工作室 |
 | **V4** | 规划中 | 社区串门系统、作品发布、点赞机制、热度排行榜 |
@@ -99,13 +100,13 @@ A built-in C++ coding lab provides an editor, a run button and a console output 
 
 ## 运行方式
 
-1. **本地运行**：下载源码，直接打开 `index.html`（或 `python3 -m http.server` 后访问 localhost）
-2. **在线预览**：支持 GitHub Pages / Gitee Pages 云端部署访问
+1. **本地运行**：下载源码，在项目目录运行 `python3 -m http.server 8080`，浏览器访问 `http://localhost:8080`（本项目基于 ES Modules，请勿直接双击打开 index.html）
+2. **在线预览**：支持 GitHub Pages / Gitee Pages 云端部署访问，一键点开即用
 
 ## 操作说明
 
-- **电脑**：`WASD`/方向键移动，鼠标转动视角（点击画面进入沉浸模式，`Esc` 释放），`Shift` 加速；点击 AI 小人查看详情；右侧面板选中员工后输入指令下发任务
-- **平板**：左下角方向按钮移动，单指拖拽转视角；轻点 AI 小人查看详情
+- **电脑**：`WASD`/方向键移动，鼠标转动视角（点击画面进入沉浸模式，`Esc` 释放），`Shift` 加速；点击 AI 小人查看详情；右侧面板选中员工后输入指令，点「私聊发送」单独下发，或点「全体广播」让所有在岗 Agent 自主认领
+- **平板**：左下角方向按钮移动，单指拖拽转视角；轻点 AI 小人查看详情；指令下发同上
 
 ## 开源说明
 
