@@ -13,7 +13,14 @@ This project is a browser-native, tablet-first immersive 3D creation platform. U
 
 The platform supports up to 10 AI agents, each with an independent name, role and status logic. Agents stand by at their own workstations, walk to the target desk after receiving a task, stop automatically when encountering obstacles (no wall clipping), and return to their stations after completing work. Two dispatch modes are supported: **Broadcast** (all on-duty agents self-negotiate and claim only role-matching tasks) and **Private Chat** (the message reaches only the selected agent).
 
-A built-in C++ coding lab provides an editor, a run button and a console output — offline by default, with optional online real compilation. The whole project runs purely on the web, no installation, no API key required, accessible on all devices.
+**Dual running modes:**
+
+1. **Demo Mode (Default)**: Open and use instantly. Pre-set interaction logic, no model download, zero waiting.
+2. **WebGPU Local Inference Mode (WebLLM)**: The lightweight Qwen3-1.7B model is downloaded into your browser. All reasoning runs locally on your device — no API key, no backend consumption, no extra software, offline available after caching.
+
+An optional **Online API** (OpenAI-compatible) channel is also available for advanced users. A built-in C++ coding lab provides an editor, a run button and a console output — offline by default, with optional online real compilation.
+
+**Model Info**: The agent uses Qwen3-1.7B for WebLLM browser-side local inference. This project **does NOT require WorkBuddy** — WorkBuddy is only a tool used by the developer for prompt testing.
 
 ---
 
@@ -56,12 +63,12 @@ A built-in C++ coding lab provides an editor, a run button and a console output 
 - 可选"联网真实编译"：连接 Wandbox / Piston 在线编译器获得真实运行结果
 - 编码专项 AI 智能体可读取、修改虚拟文件系统中的代码，"代码文件"面板实时查看修改记录
 
-### 4. AI 三通道连接（保证一定能连上）
+### 4. AI 双运行模式（演示 / 本地推理）
 
-- **离线AI引擎（默认）**：内置规则引擎，无需联网、开箱即用
-- **本地大模型 WebLLM**：浏览器内 WebGPU 推理（Qwen2.5 / Llama-3.2）
-- **在线 API**：OpenAI 兼容接口（DeepSeek / 通义千问 / 智谱 / Kimi / OpenAI）
-- 每种通道均可"测试连接"验证，异常自动回退离线引擎，演示不中断
+- **演示模式（默认）**：即时体验全部交互，无需下载模型——内置规则引擎模拟各岗位 Agent 的思考与协作，点开即用
+- **WebLLM 本地推理模式**：加载 **Qwen3-1.7B** 轻量模型，AI 在你的设备本地运行，无费用、无密钥，首次需要下载模型文件（约 1.1GB），缓存后支持离线使用
+- **在线 API（高级选项）**：OpenAI 兼容接口（DeepSeek / 通义千问 / 智谱 / Kimi / OpenAI），填写地址/密钥/模型名即用，保存后自动切换
+- 每种模式均可"测试连接"验证；浏览器不支持 WebGPU 时会明确提示，并引导回退演示模式，体验不中断
 
 ---
 
@@ -75,7 +82,7 @@ A built-in C++ coding lab provides an editor, a run button and a console output 
 
 ## 项目优势
 
-- **零门槛**：无需下载安装，浏览器直接打开即可使用
+- **零门槛**：无需下载安装，浏览器直接打开即可使用；默认演示模式无需下载任何模型
 - **高创新**：融合 3D 沉浸式交互 + AI 智能体团队协作 + 编程实训
 - **强实用**：适配科创竞赛、AI 启蒙、C++ 信息学入门学习
 - **高拓展**：模块化设计，支持持续迭代新功能与新场景
@@ -86,14 +93,27 @@ A built-in C++ coding lab provides an editor, a run button and a console output 
 
 ---
 
+## 模型说明
+
+智能体在 WebLLM 本地推理模式下使用 **Qwen3-1.7B**（MLC 量化权重，约 1.1GB）浏览器本地推理，可切换 Qwen3-4B（约 2.5GB）获得更强表现。
+⚠️ 本项目**不强制依赖 WorkBuddy**，WorkBuddy 只是开发者调试提示词时使用的辅助工具，普通用户完全不需要。
+
+## 注意事项
+
+- WebLLM 模式需要 WebGPU 支持（Chrome / Edge 等新版浏览器）；首次加载模型建议在 WiFi 环境下进行
+- WebGPU 性能取决于你的设备，平板 / 手机运行时会有轻微发热
+- 直接双击 index.html 无法运行（ES Modules 需要 HTTP 服务），请按「运行方式」启动本地服务器或使用在线演示
+
+---
+
 ## 版本迭代体系（V1 → V5）
 
 | 版本 | 状态 | 内容 |
 | --- | --- | --- |
-| **V1** | ✅ 已完成 | 基础 3D 场景搭建、第一人称漫游与碰撞、AI 智能体核心交互（四状态 / 详情面板 / 流式日志）、**Agent 移动行为规则**（前往目标办公桌 / 遇障停止 / 完工返回工位）、**两种指令下发模式**（全体广播认领 / 单独私聊 / 忙碌排队）、C++ 编程实验室基础壳子、AI 三通道连接 |
-| **V2** | 规划中 | 完整编程实验室落地、C++ 在线编译完善、编码 AI 辅助排查 BUG 增强 |
-| **V3** | 规划中 | 可视化拖拽式 3D 场景编辑器，自定义搭建专属工作室 |
-| **V4** | 规划中 | 社区串门系统、作品发布、点赞机制、热度排行榜 |
+| **V1** | ✅ 已完成 | 基础 3D 场景搭建、第一人称漫游与碰撞、AI 智能体核心交互（四状态 / 详情面板 / 流式日志）、**Agent 移动行为规则**（前往目标办公桌 / 遇障停止 / 完工返回工位）、**两种指令下发模式**（全体广播认领 / 单独私聊 / 忙碌排队）、**AI 双运行模式**（演示模式默认 / WebLLM 本地推理，在线 API 高级选项）、C++ 编程实验室基础壳子 |
+| **V2** | 规划中 | 可视化拖拽式 3D 场景编辑器，自定义搭建专属工作室、摆放工位与 Agent |
+| **V3** | 规划中 | 多人联机漫游：点对点 P2P 联机参观（WebRTC，轻量信令服务握手） |
+| **V4** | 规划中 | 社区功能：发布工作室、参观他人作品、点赞、热度排行榜（需轻量存储服务） |
 | **V5** | 规划中 | 全局性能优化、设备适配打磨、新手引导与全套项目文档 |
 
 ---
@@ -107,6 +127,7 @@ A built-in C++ coding lab provides an editor, a run button and a console output 
 
 - **电脑**：`WASD`/方向键移动，鼠标转动视角（点击画面进入沉浸模式，`Esc` 释放），`Shift` 加速；点击 AI 小人查看详情；右侧面板选中员工后输入指令，点「私聊发送」单独下发，或点「全体广播」让所有在岗 Agent 自主认领
 - **平板**：左下角方向按钮移动，单指拖拽转视角；轻点 AI 小人查看详情；指令下发同上
+- **AI 模式切换**：点击顶部「AI连接」芯片打开设置面板——⚡演示模式即开即用；🧠WebLLM 本地推理需首次下载模型（按提示连接 WiFi），加载期间可随时切回演示模式
 
 ## 开源说明
 
