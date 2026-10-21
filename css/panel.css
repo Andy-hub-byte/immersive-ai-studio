@@ -798,3 +798,25 @@
   border-bottom: 1px solid var(--accent);
   transform: rotate(45deg);
 }
+
+/* =--------------- V2 长期记忆芯片 / Long-term memory chip ---------------- */
+.memory-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-2, #9fb0d0);
+  background: rgba(79, 140, 255, 0.12);
+  border: 1px solid rgba(79, 140, 255, 0.35);
+  border-radius: 999px;
+  white-space: nowrap;
+  user-select: none;
+}
+/* 清除按钮的确认态（二次点击防误触） */
+.side-icon-btn.danger {
+  color: #fff;
+  background: #e5484d;
+  border-color: #e5484d;
+}
+.side-icon-btn.danger:hover { filter: brightness(1.1); }
