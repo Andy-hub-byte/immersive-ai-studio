@@ -9,6 +9,7 @@
 import { runCpp } from './compiler.js';
 import { vfs } from './vfs.js';
 import { llm } from './webllm.js';
+import { memory, memoryChipText } from './memory.js';
 import { LLM_PROVIDERS, API_PRESETS } from './config.js';
 
 /** 浮动面板容器管理：一次只打开一个面板 */
@@ -66,9 +67,43 @@ export class ChatPanel {
     this.saveApiBtn = this.panel.querySelector('#btn-save-api');
     this.useApiBtn = this.panel.querySelector('#btn-use-api');
     this.testApiBtn = this.panel.querySelector('#btn-test-api');
+    // V2 长期记忆芯片 + 清除按钮
+    this.memoryChip = this.panel.querySelector('#memory-chip');
+    this.memoryClearBtn = this.panel.querySelector('#btn-memory-clear');
+    this._memoryArmed = false; // 二次点击确认（防误触清空）
+    this._memoryArmTimer = null;
 
     this._bind();
     this._syncProviderUI();
+    this._refreshMemoryChip();
+    // 记忆变化（含场景 Agent 的对话）时刷新芯片
+    memory.onChange = () => this._refreshMemoryChip();
+  }
+
+  /** 刷新记忆芯片文案 / refresh memory chip label */
+  _refreshMemoryChip() {
+    if (this.memoryChip) this.memoryChip.textContent = memoryChipText();
+  }
+
+  /** 清除记忆：第一次点击进入确认态，3 秒内再点才真正清空 / two-click confirm */
+  _onMemoryClear() {
+    if (!this._memoryArmed) {
+      this._memoryArmed = true;
+      this.memoryClearBtn.textContent = '确认清除？';
+      this.memoryClearBtn.classList.add('danger');
+      this._memoryArmTimer = setTimeout(() => {
+        this._memoryArmed = false;
+        this.memoryClearBtn.textContent = '清除记忆';
+        this.memoryClearBtn.classList.remove('danger');
+      }, 3000);
+      return;
+    }
+    clearTimeout(this._memoryArmTimer);
+    this._memoryArmed = false;
+    this.memoryClearBtn.textContent = '清除记忆';
+    this.memoryClearBtn.classList.remove('danger');
+    memory.clear();
+    this.addMsg('ai', '已清除全部长期记忆（仅清空本机浏览器保存的记录）。/ Memory cleared.');
   }
 
   _bind() {
@@ -92,6 +127,8 @@ export class ChatPanel {
     this.saveApiBtn.addEventListener('click', () => this.saveApi());
     this.useApiBtn.addEventListener('click', () => this.switchToApi());
     this.testApiBtn.addEventListener('click', () => this.testConnection());
+    // 长期记忆：一键清除（二次点击确认）
+    this.memoryClearBtn.addEventListener('click', () => this._onMemoryClear());
     // 直接对话
     this.sendBtn.addEventListener('click', () => this.send());
     this.input.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.send(); });
@@ -146,13 +183,15 @@ export class ChatPanel {
     }
     const body = this.addMsg('ai', '…');
     try {
-      await llm.chat(
+      const reply = await llm.chat(
         [
           { role: 'system', content: '你是虚拟AI工作室搭载的 AI 助手，回答简洁、友好，使用中文。' },
           { role: 'user', content: text }
         ],
         (_delta, full) => { body.textContent = full; this.messages.scrollTop = this.messages.scrollHeight; }
       );
+      // V2 长期记忆：这一轮问答写入本机记忆，下次对话自动带上上下文
+      memory.addTurn(text, reply);
     } catch (e) {
       body.textContent = '调用失败：' + (e?.message || e) + '。请检查配置或切换回离线AI引擎。';
     }
