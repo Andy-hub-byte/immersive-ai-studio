@@ -15,6 +15,7 @@ import { AGENT_SLOTS, AGENT_COLORS, MAX_AGENTS, AgentState, StateMeta, AGENT_MOV
 import * as THREE from 'three';
 import { AgentAvatar } from './avatar.js';
 import { vfs } from './vfs.js';
+import { memory } from './memory.js';
 
 /** 依据岗位文本推断行为原型（用于离线引擎选择回复风格） */
 function detectArchetype(role = '') {
@@ -154,6 +155,9 @@ export class Agent {
       // 5. 记录回复
       this.pushHistory({ from: this.id, to: 'user', text: reply, time: Date.now() });
       if (mode === 'chat') this.avatar.showBubble(reply); // 对话状态显示气泡
+      // V2 长期记忆：Agent 与 AI 对接的问答写入本机记忆（带 Agent 名字，便于区分）
+      memory.add('user', text);
+      memory.add('agent', reply, this.name);
 
       // 6. 解析回复中的协作与代码动作
       await this._processActions(reply, text, depth);
