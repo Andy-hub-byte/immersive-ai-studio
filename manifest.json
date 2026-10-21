@@ -1,0 +1,17 @@
+{
+  "name": "沉浸式 3D AI 工作室 · Immersive 3D AI Studio",
+  "short_name": "3D AI 工作室",
+  "description": "浏览器内 3D 虚拟 AI 工作室：创建 AI 员工团队、下发任务、观看实时思考与协作。 / Browser-native 3D virtual AI studio: build agent teams, assign tasks, watch them think and collaborate.",
+  "lang": "zh-CN",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0b1020",
+  "theme_color": "#4f8cff",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
