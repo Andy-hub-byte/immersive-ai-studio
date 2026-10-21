@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#0b0f1a" />
+  <!-- PWA：可"添加到主屏幕"，安卓平板像原生 App 一样全屏使用 / Add to home screen -->
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f8ff7'/%3E%3Ccircle cx='16' cy='13' r='5' fill='%23fff'/%3E%3Crect x='9' y='19' width='14' height='8' rx='3' fill='%23fff' opacity='.85'/%3E%3C/svg%3E" />
   <title>虚拟AI工作室 · Immersive AI Studio</title>
   <!-- 深色科技风：全局基础样式 -->
@@ -23,6 +26,18 @@
   <div id="app">
     <!-- ============ 中间主体区域：3D 工作室视口 ============ -->
     <main id="viewport">
+      <!-- WebGL 不可用时的降级提示（老设备/无 GPU 环境；AI 功能仍可用） -->
+      <div id="gl-notice" class="gl-notice" hidden>
+        <div class="gl-notice-card">
+          <strong>⚠️ 3D 场景不可用 / 3D scene unavailable</strong>
+          <p>当前浏览器/设备未能创建 WebGL 上下文（老旧平板或显卡驱动受限时常见）。<br />
+             Your browser could not create a WebGL context (common on older tablets).</p>
+          <p>AI 助手对话、长期记忆、C++ 实验室、文件面板仍可正常使用；<br />
+             建议更换 Chrome / Edge 新版本或开启硬件加速后刷新重试。<br />
+             AI chat, memory, C++ lab and file panel still work. Try a newer Chrome/Edge or enable hardware acceleration.</p>
+        </div>
+      </div>
+
       <!-- 顶部左侧 HUD：品牌 + AI连接状态 + 功能入口 -->
       <header id="hud">
         <div class="hud-brand">
@@ -124,6 +139,9 @@
         <header class="float-head">
           <strong>AI 连接设置</strong>
           <div class="float-head-actions">
+            <!-- V2 长期记忆：条数显示 + 一键清除（二次点击确认） -->
+            <span class="memory-chip" id="memory-chip" title="AI 长期记忆：保存在本机浏览器，重启不丢失 / Long-term memory (local only)">🧠 记忆：空</span>
+            <button class="side-icon-btn" id="btn-memory-clear" type="button">清除记忆</button>
             <button class="side-icon-btn panel-close" type="button">关闭</button>
           </div>
         </header>
