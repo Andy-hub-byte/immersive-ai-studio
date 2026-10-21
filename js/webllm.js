@@ -7,6 +7,7 @@
  * 任意通道异常时自动回退到离线引擎，平台功能不受影响。
  */
 import { LLM_PROVIDERS } from './config.js';
+import { withMemory } from './memory.js';
 
 /** WebLLM CDN 地址（依次尝试，任一可用即可） */
 const WEBLLM_URLS = [
@@ -139,15 +140,18 @@ export class LLMService {
     return full;
   }
 
-  /* ---------- 统一对话入口（按当前通道分发，异常自动回退离线引擎） ---------- */
-  async chat(messages, onChunk = () => {}) {
+  /* ---------- 统一对话入口（按当前通道分发，异常自动回退离线引擎） ----------
+   * opts.useMemory=false 可关闭记忆注入（如连接测试的探针消息，避免污染记忆）。 */
+  async chat(messages, onChunk = () => {}, opts = {}) {
+    // V2 长期记忆：把最近对话摘要注入 system prompt，让 AI 记得之前聊过什么
+    const msgs = opts.useMemory === false ? messages : withMemory(messages);
     try {
       if (this.provider === LLM_PROVIDERS.WEBLLM && this.engine) {
         // Qwen3 系列默认开启"思考模式"，浏览器推理慢且会刷屏推理 token，
         // 工作室场景需要即时简短回复，显式关闭思考模式。
         const extra = this.modelId?.startsWith('Qwen3') ? { enable_thinking: false } : undefined;
         const chunks = await this.engine.chat.completions.create({
-          messages, stream: true, temperature: 0.7, ...(extra ? { extra_body: extra } : {})
+          messages: msgs, stream: true, temperature: 0.7, ...(extra ? { extra_body: extra } : {})
         });
         let full = '';
         for await (const chunk of chunks) {
@@ -157,7 +161,7 @@ export class LLMService {
         return full;
       }
       if (this.provider === LLM_PROVIDERS.API) {
-        return await this.chatViaApi(messages, onChunk);
+        return await this.chatViaApi(msgs, onChunk);
       }
     } catch (e) {
       // 真实模型通道失败 → 回退离线引擎，保证功能不断
@@ -185,7 +189,7 @@ export class LLMService {
       }
       if (this.provider === LLM_PROVIDERS.WEBLLM) {
         if (!this.engine) return { ok: false, message: '本地模型尚未加载，请先点击"加载模型"', ms: 0 };
-        const r = await this.chat(probe, () => {});
+        const r = await this.chat(probe, () => {}, { useMemory: false }); // 探针不注入/不污染记忆
         return { ok: true, message: `本地模型连接成功，回复：${r.slice(0, 40)}`, ms: Math.round(performance.now() - t0) };
       }
       // 离线引擎
