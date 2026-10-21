@@ -13,3 +13,8 @@ npm-debug.log*
 # 依赖（本项目为纯静态站点，无 node_modules）
 node_modules/
 .codebuddy/
+
+# smolagent-lora-lab 独立项目(将推送到自己的仓库, 不随本仓库分发)
+smolagent-lora-lab/
+smolagent-lora-lab-selfuse/
+*.zip
