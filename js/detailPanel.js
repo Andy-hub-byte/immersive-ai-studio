@@ -6,6 +6,7 @@
  */
 
 import { StateMeta } from './config.js';
+import { t, pick } from './i18n.js';
 
 export class DetailPanel {
   /**
@@ -53,7 +54,7 @@ export class DetailPanel {
     this.avatar.textContent = agent.name.slice(0, 1);
     this.nameEl.textContent = agent.name;
     this.roleEl.textContent = agent.role;
-    this.slotEl.textContent = `工位：${agent.slot.label}`;
+    this.slotEl.textContent = t('detail.stationOf', { label: pick(agent.slot.label) });
     this.refresh();
     this.root.hidden = false;
   }
@@ -64,21 +65,21 @@ export class DetailPanel {
     if (!a) return;
     const meta = StateMeta[a.state] ?? StateMeta.idle;
     this.stateChip.className = `detail-state state-chip ${meta.css}`;
-    this.stateChip.innerHTML = `<i class="dot"></i>${meta.label}`;
-    this.taskEl.textContent = a.currentTask || '暂无进行中的任务';
+    this.stateChip.innerHTML = `<i class="dot"></i>${pick(meta.label)}`;
+    this.taskEl.textContent = a.currentTask || t('detail.noTask');
 
     // 历史对话记录（用户 ↔ Agent、Agent ↔ Agent）
     const history = a.getHistory();
     if (history.length === 0) {
-      this.historyEl.innerHTML = '<div class="history-empty">暂无对话记录，选中后下发任务或点击「发起对话」开始交流。</div>';
+      this.historyEl.innerHTML = `<div class="history-empty">${t('detail.noHistory')}</div>`;
       return;
     }
     this.historyEl.innerHTML = '';
     for (const h of history) {
       const item = document.createElement('div');
       item.className = 'history-item';
-      const fromName = h.from === 'user' ? '你' : this._name(h.from);
-      const toName = h.to === 'user' ? '你' : this._name(h.to);
+      const fromName = h.from === 'user' ? t('you') : this._name(h.from);
+      const toName = h.to === 'user' ? t('you') : this._name(h.to);
       const t = new Date(h.time);
       const hm = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
       item.innerHTML = `<div class="h-head"><span class="h-from">${fromName} → ${toName}</span><span>${hm}</span></div><div class="h-text"></div>`;
