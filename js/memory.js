@@ -10,6 +10,7 @@
  * Memory stays in the user's browser only — never uploaded, always clearable.
  */
 import { llm } from './webllm.js';
+import { t } from './i18n.js';
 
 const LS_KEY = 'ai-studio-memory-v1';
 const MAX_RECORDS = 50;   // 最多保留条数（超出丢弃最旧，防止无限增长）
@@ -50,13 +51,13 @@ export class MemoryStore {
    * @param {string} [name] Agent 名字（role='agent' 时展示）
    */
   add(role, text, name = '') {
-    const t = String(text ?? '').trim();
-    if (!t) return;
+    const txt = String(text ?? '').trim();
+    if (!txt) return;
     this.records.push({
       time: Date.now(),
       role,
-      name: name || (role === 'user' ? '你' : role === 'agent' ? 'Agent' : 'AI'),
-      text: t.length > MAX_TEXT ? t.slice(0, MAX_TEXT) + '…' : t
+      name: name || (role === 'user' ? t('mem.nameUser') : role === 'agent' ? t('mem.nameAgent') : t('mem.nameAi')),
+      text: txt.length > MAX_TEXT ? txt.slice(0, MAX_TEXT) + '…' : txt
     });
     if (this.records.length > MAX_RECORDS) this.records.splice(0, this.records.length - MAX_RECORDS);
     this._save();
@@ -83,8 +84,7 @@ export class MemoryStore {
       return `- [${hh}] ${r.name}: ${r.text.replace(/\s+/g, ' ').slice(0, 120)}`;
     });
     return [
-      '【历史记忆 / Memory】以下是本机浏览器中保存的近期对话（供你保持上下文连贯，' +
-      '即使用户换了一种问法也能对应上；没有相关信息时忽略即可）：',
+      t('mem.summary'),
       ...lines
     ].join('\n');
   }
@@ -121,7 +121,7 @@ export function withMemory(messages) {
 /** 记忆芯片的人类可读状态 / human-readable chip label */
 export function memoryChipText() {
   const n = memory.count;
-  return n === 0 ? '🧠 记忆：空' : `🧠 记忆：${n} 条`;
+  return n === 0 ? t('mem.chipEmpty') : t('mem.chip', { n });
 }
 
 export { LS_KEY as MEMORY_LS_KEY };
