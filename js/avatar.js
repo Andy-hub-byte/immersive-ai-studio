@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { StateMeta } from './config.js';
+import { pick } from './i18n.js';
 
 export class AgentAvatar {
   /**
@@ -149,7 +150,7 @@ export class AgentAvatar {
     this.statusRing.material.color.setHex(meta.color);
     this.statusOrb.material.color.setHex(meta.color);
     this.tagState.className = `tag-state ${meta.css}`;
-    this.tagState.innerHTML = `<i class="dot"></i>${meta.label}`;
+    this.tagState.innerHTML = `<i class="dot"></i>${pick(meta.label)}`;
   }
 
   /** 显示对话气泡（自动淡出隐藏） */
