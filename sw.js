@@ -4,7 +4,7 @@
  * Strategy: network-first with cache fallback (offline-friendly).
  * 注意：只缓存本站同源静态资源；WebLLM 模型权重由引擎自己存 IndexedDB。
  */
-const CACHE = 'ai-studio-v2';
+const CACHE = 'ai-studio-v3';
 const CORE = [
   './',
   './index.html',
