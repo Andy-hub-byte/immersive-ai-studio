@@ -12,12 +12,15 @@ export const AgentState = Object.freeze({
   TALKING: 'talking'      // 对话
 });
 
-/** 状态对应的中文名与配色（与 CSS 中 .state-* 保持一致） */
+/**
+ * 状态对应的标签与配色（V2：label 双语化 {zh,en}，经 i18n.pick() 取值；
+ * 与 CSS 中 .state-* 保持一致）
+ */
 export const StateMeta = Object.freeze({
-  idle:      { label: '空闲',     color: 0x94a3b8, css: 'state-idle' },
-  thinking:  { label: '思考中',   color: 0xfbbf24, css: 'state-thinking' },
-  executing: { label: '执行任务', color: 0x4f8ff7, css: 'state-executing' },
-  talking:   { label: '对话中',   color: 0xa78bfa, css: 'state-talking' }
+  idle:      { label: { zh: '空闲', en: 'Idle' },         color: 0x94a3b8, css: 'state-idle' },
+  thinking:  { label: { zh: '思考中', en: 'Thinking' },   color: 0xfbbf24, css: 'state-thinking' },
+  executing: { label: { zh: '执行任务', en: 'Executing' }, color: 0x4f8ff7, css: 'state-executing' },
+  talking:   { label: { zh: '对话中', en: 'Talking' },    color: 0xa78bfa, css: 'state-talking' }
 });
 
 /** Agent 最多数量（V1 计划：最多 10 个） */
@@ -32,19 +35,19 @@ export const MAX_AGENTS = 10;
  */
 export const AGENT_SLOTS = Object.freeze([
   // —— 后墙工位排（桌子在 z=-7.2，人在桌前）——
-  { x: -4.5, z: -5.5, yaw: Math.PI,         label: '后墙工位 1', work: { x: -4.5, z: -6.4 } },
-  { x: 0,    z: -5.5, yaw: Math.PI,         label: '后墙工位 2', work: { x: 0,    z: -6.4 } },
-  { x: 4.5,  z: -5.5, yaw: Math.PI,         label: '后墙工位 3', work: { x: 4.5,  z: -6.4 } },
+  { x: -4.5, z: -5.5, yaw: Math.PI,         label: { zh: '后墙工位 1', en: 'Back-wall desk 1' }, work: { x: -4.5, z: -6.4 } },
+  { x: 0,    z: -5.5, yaw: Math.PI,         label: { zh: '后墙工位 2', en: 'Back-wall desk 2' }, work: { x: 0,    z: -6.4 } },
+  { x: 4.5,  z: -5.5, yaw: Math.PI,         label: { zh: '后墙工位 3', en: 'Back-wall desk 3' }, work: { x: 4.5,  z: -6.4 } },
   // —— 左墙工位（桌子在 x=-8.6，人在桌右侧房间内）——
-  { x: -7.2, z: -2.5, yaw: -Math.PI / 2,    label: '左墙工位 1', work: { x: -7.85, z: -2.5 } },
-  { x: -7.2, z: 2.5,  yaw: -Math.PI / 2,    label: '左墙工位 2', work: { x: -7.85, z: 2.5 } },
+  { x: -7.2, z: -2.5, yaw: -Math.PI / 2,    label: { zh: '左墙工位 1', en: 'Left-wall desk 1' }, work: { x: -7.85, z: -2.5 } },
+  { x: -7.2, z: 2.5,  yaw: -Math.PI / 2,    label: { zh: '左墙工位 2', en: 'Left-wall desk 2' }, work: { x: -7.85, z: 2.5 } },
   // —— 右墙工位（桌子在 x=8.6，人在桌左侧房间内）——
-  { x: 7.2,  z: -2.5, yaw: Math.PI / 2,     label: '右墙工位 1', work: { x: 7.85, z: -2.5 } },
-  { x: 7.2,  z: 2.5,  yaw: Math.PI / 2,     label: '右墙工位 2', work: { x: 7.85, z: 2.5 } },
+  { x: 7.2,  z: -2.5, yaw: Math.PI / 2,     label: { zh: '右墙工位 1', en: 'Right-wall desk 1' }, work: { x: 7.85, z: -2.5 } },
+  { x: 7.2,  z: 2.5,  yaw: Math.PI / 2,     label: { zh: '右墙工位 2', en: 'Right-wall desk 2' }, work: { x: 7.85, z: 2.5 } },
   // —— 会议区站位（目标位置 = 会议桌旁）——
-  { x: -2.4, z: 3.4,  yaw: Math.PI * 0.75,  label: '会议区站位 1', work: { x: -1.75, z: 2.5 } },
-  { x: 2.4,  z: 3.4,  yaw: -Math.PI * 0.75, label: '会议区站位 2', work: { x: 1.75,  z: 2.5 } },
-  { x: 0,    z: 5.2,  yaw: Math.PI,         label: '会议区站位 3', work: { x: 0,     z: 2.9 } }
+  { x: -2.4, z: 3.4,  yaw: Math.PI * 0.75,  label: { zh: '会议区站位 1', en: 'Meeting spot 1' }, work: { x: -1.75, z: 2.5 } },
+  { x: 2.4,  z: 3.4,  yaw: -Math.PI * 0.75, label: { zh: '会议区站位 2', en: 'Meeting spot 2' }, work: { x: 1.75,  z: 2.5 } },
+  { x: 0,    z: 5.2,  yaw: Math.PI,         label: { zh: '会议区站位 3', en: 'Meeting spot 3' }, work: { x: 0,     z: 2.9 } }
 ]);
 
 /** 10 个 Agent 的低饱和度配色（避免霓虹感，轮流分配） */
