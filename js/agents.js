@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { AgentAvatar } from './avatar.js';
 import { vfs } from './vfs.js';
 import { memory } from './memory.js';
+import { t, pick } from './i18n.js';
 
 /** 依据岗位文本推断行为原型（用于离线引擎选择回复风格） */
 function detectArchetype(role = '') {
@@ -25,12 +26,12 @@ function detectArchetype(role = '') {
   return 'generic';
 }
 
-/** 各原型的系统提示词（真实大模型模式下使用） */
+/** 各原型的系统提示词（真实大模型模式下使用；V2 双语） */
 const SYSTEM_PROMPTS = {
-  planner: '你是虚拟AI工作室的"规划"岗位员工，负责需求分析与任务拆解，回答结构化、简洁。需要他人落地实现时，在回复末尾另起一行输出 [TO:对方名字] 具体指令。',
-  coder: '你是虚拟AI工作室的"编码"岗位员工，负责编写与修改代码，操作对象是虚拟文件系统。被要求修改代码时，先说明读取了哪个文件，然后用一个 ```cpp 代码块输出该文件的完整新内容。',
-  artist: '你是虚拟AI工作室的"创作"岗位员工，负责文案、创意与内容设计，回答有创意、简洁。除非用户明确要求协作，不要输出 [TO:xxx] 指令。',
-  generic: '你是虚拟AI工作室的一名 AI 员工，请根据岗位职责专业、简洁地完成任务。需要同事协作时，可输出 [TO:对方名字] 具体指令。'
+  planner: { zh: '你是虚拟AI工作室的"规划"岗位员工，负责需求分析与任务拆解，回答结构化、简洁。需要他人落地实现时，在回复末尾另起一行输出 [TO:对方名字] 具体指令。', en: 'You are the "planning" agent at Immersive AI Studio, responsible for requirements analysis and task breakdown. Answer in a structured, concise way. When someone else must implement it, output a line at the end: [TO:their name] specific instruction.' },
+  coder:   { zh: '你是虚拟AI工作室的"编码"岗位员工，负责编写与修改代码，操作对象是虚拟文件系统。被要求修改代码时，先说明读取了哪个文件，然后用一个 ```cpp 代码块输出该文件的完整新内容。', en: 'You are the "coding" agent at Immersive AI Studio, writing and modifying code in the virtual file system. When asked to change code, first state which file you read, then output the complete new file content in one ```cpp code block.' },
+  artist:  { zh: '你是虚拟AI工作室的"创作"岗位员工，负责文案、创意与内容设计，回答有创意、简洁。除非用户明确要求协作，不要输出 [TO:xxx] 指令。', en: 'You are the "creative" agent at Immersive AI Studio, handling copywriting, ideas and content design. Be creative and concise. Do not output [TO:xxx] instructions unless the user explicitly asks for collaboration.' },
+  generic: { zh: '你是虚拟AI工作室的一名 AI 员工，请根据岗位职责专业、简洁地完成任务。需要同事协作时，可输出 [TO:对方名字] 具体指令。', en: 'You are an AI agent at Immersive AI Studio. Complete tasks professionally and concisely according to your role. When you need a colleague, output [TO:their name] specific instruction.' }
 };
 
 /**
@@ -84,7 +85,7 @@ export class Agent {
     this.queue = [];          // 指令队列：忙碌时新指令排队，当前任务完成后自动处理
   }
 
-  get stateLabel() { return StateMeta[this.state].label; }
+  get stateLabel() { return pick(StateMeta[this.state].label); }
   get stateCss() { return StateMeta[this.state].css; }
 
   /* ---------- 状态机 ---------- */
@@ -95,9 +96,9 @@ export class Agent {
     this.logPanel.updateAgentCard(this);
     this.logPanel.addState(this, this.stateLabel);
     // 状态对应的任务描述（展示在状态卡片与详情面板）
-    if (state === AgentState.THINKING) this.currentTask = this._pendingTask || '正在思考…';
-    else if (state === AgentState.EXECUTING) this.currentTask = this._pendingTask || '正在执行任务…';
-    else if (state === AgentState.TALKING) this.currentTask = this._pendingTask || '对话中';
+    if (state === AgentState.THINKING) this.currentTask = this._pendingTask || t('agent.thinking');
+    else if (state === AgentState.EXECUTING) this.currentTask = this._pendingTask || t('agent.executing');
+    else if (state === AgentState.TALKING) this.currentTask = this._pendingTask || t('agent.talking');
     else this.currentTask = '';
   }
 
@@ -114,7 +115,7 @@ export class Agent {
     // （支持用户在任务执行中途随时私聊追加/修改细节，不必重新向全体下发）
     if (this.busy) {
       this.queue.push({ text, from, mode, depth, broadcast });
-      this.logPanel.addSystem(`「${this.name}」正在执行任务，指令已排队（第 ${this.queue.length} 位），完成当前任务后自动处理。`);
+      this.logPanel.addSystem(t('agent.queued', { name: this.name, n: this.queue.length }));
       return;
     }
     this.busy = true;
@@ -122,7 +123,7 @@ export class Agent {
       // 1. 记录输入（广播消息也写入历史，便于详情面板追溯）
       this.pushHistory({ from, to: this.id, text, time: Date.now() });
       if (from === 'user') {
-        this.logPanel.addMessage('你', broadcast ? '全体Agent' : this.name, text, 'user', broadcast ? null : this.id);
+        this.logPanel.addMessage(t('you'), broadcast ? t('allAgents') : this.name, text, 'user', broadcast ? null : this.id);
       }
 
       this._pendingTask = text.length > 40 ? text.slice(0, 40) + '…' : text;
@@ -130,12 +131,12 @@ export class Agent {
       // 2.【V1行为规则】收到任务后移动到目标办公桌位置（移动中遇障自动停止，禁止穿墙）
       if (this._needMove()) {
         this.setState(AgentState.EXECUTING);
-        this._pendingTask = `前往${this.slot.label}的目标位置`;
+        this._pendingTask = t('agent.going', { slot: pick(this.slot.label) });
         const arrived = await this._moveTo(this.slot.work);
         if (!arrived) {
-          this.logPanel.addAction(this, '移动途中碰到障碍物，已停止移动（禁止穿墙），在原地继续执行任务。');
+          this.logPanel.addAction(this, t('agent.blocked'));
         } else {
-          this.logPanel.addAction(this, `已到达${this.slot.label}的目标办公桌位置。`);
+          this.logPanel.addAction(this, t('agent.arrived', { slot: pick(this.slot.label) }));
         }
       }
 
@@ -248,19 +249,19 @@ export class Agent {
 
   /** 构造发送给大模型的消息列表 */
   _buildMessages(text, from) {
-    const msgs = [{ role: 'system', content: SYSTEM_PROMPTS[this.archetype] }];
+    const msgs = [{ role: 'system', content: pick(SYSTEM_PROMPTS[this.archetype]) }];
     // 附带虚拟文件系统概况（编码岗位需要知道有哪些文件可操作）
     if (this.archetype === 'coder') {
       const files = vfs.list().map((f) => `${f.name}（${f.content.split('\n').length}行）`).join('；');
-      msgs.push({ role: 'system', content: `虚拟文件系统当前文件：${files || '（空）'}` });
+      msgs.push({ role: 'system', content: t('sys.coderFiles', { files: files || t('sys.coderFilesEmpty') }) });
     }
     // 最近几轮对话作为上下文
     for (const h of this.getHistory().slice(-6)) {
       if (h.from === this.id) msgs.push({ role: 'assistant', content: h.text });
-      else msgs.push({ role: 'user', content: (h.from === 'user' ? '用户' : this.manager.get(h.from)?.name || h.from) + '：' + h.text });
+      else msgs.push({ role: 'user', content: (h.from === 'user' ? t('user') : this.manager.get(h.from)?.name || h.from) + '：' + h.text });
     }
     if (from === 'user') msgs.push({ role: 'user', content: text });
-    else msgs.push({ role: 'user', content: `（来自 ${this.manager.get(from)?.name || from} 的协作消息）${text}` });
+    else msgs.push({ role: 'user', content: `${t('agent.collabFrom', { name: this.manager.get(from)?.name || from })}${text}` });
     return msgs;
   }
 
@@ -269,13 +270,13 @@ export class Agent {
     // a. 协作指令 [TO:名字] …
     const delegations = [...reply.matchAll(/\[TO:([^\]\n]+)\]/g)];
     for (const [, targetName] of delegations) {
-      if (depth >= 3) { this.logPanel.addSystem('协作深度已达上限，停止继续转派。'); break; }
+      if (depth >= 3) { this.logPanel.addSystem(t('agent.depthMax')); break; }
       const target = this.manager.findByName(targetName.trim());
       // 提取该指令后的内容（同指令行的剩余部分）
       const idx = reply.indexOf(`[TO:${targetName}]`);
       const cmd = reply.slice(idx + `[TO:${targetName}]`.length).split('\n')[0].trim();
       if (target && cmd) this.manager.routeMessage(this, target, cmd, depth + 1);
-      else if (!target) this.logPanel.addSystem(`未找到名为「${targetName.trim()}」的同事，转派取消。`);
+      else if (!target) this.logPanel.addSystem(t('agent.noColleague', { name: targetName.trim() }));
     }
     // b. 代码块 → 编码岗位员工写入虚拟文件系统
     const codeBlock = reply.match(/```(?:cpp|c\+\+)?\s*\n([\s\S]*?)```/);
@@ -300,11 +301,12 @@ export class Agent {
     // 读取原文件（不存在则视为新建）
     let oldContent = '';
     try { oldContent = vfs.read(fileName); } catch { /* 新文件 */ }
-    this.logPanel.addAction(this, `读取文件 ${fileName}（${oldContent ? oldContent.split('\n').length + ' 行' : '新文件'}）`);
+    const linesDesc = oldContent ? t('unit.lines', { n: oldContent.split('\n').length }) : t('agent.newFile');
+    this.logPanel.addAction(this, t('agent.readFile', { name: fileName, lines: linesDesc }));
 
     // 分步执行日志，让“执行任务”状态过程可见
     await new Promise((r) => setTimeout(r, 500));
-    this.logPanel.addAction(this, `分析修改点并生成新版本…`);
+    this.logPanel.addAction(this, t('agent.analyzing'));
     await new Promise((r) => setTimeout(r, 500));
 
     // 写入虚拟文件系统（纯内存）
@@ -313,8 +315,13 @@ export class Agent {
     const oldLines = oldContent ? oldContent.split('\n').length : 0;
     const newLines = newContent.split('\n').length;
     const diff = newLines - oldLines;
-    this.logPanel.addAction(this, `已${oldContent ? '修改' : '新建'} ${fileName}（${diff >= 0 ? '+' : ''}${diff} 行，共 ${newLines} 行）`);
-    this.avatar.showBubble(`已更新 ${fileName}`, 3200);
+    this.logPanel.addAction(this, t('agent.fileUpdated', {
+      verb: oldContent ? t('agent.verbMod') : t('agent.verbNew'),
+      name: fileName,
+      diff: `${diff >= 0 ? '+' : ''}${diff}`,
+      total: newLines
+    }));
+    this.avatar.showBubble(t('agent.bubbleUpdated', { name: fileName }), 3200);
   }
 
   /* ---------- 离线本地引擎回复（默认 AI，无需联网） ---------- */
@@ -322,15 +329,9 @@ export class Agent {
     if (this.archetype === 'planner') {
       // 规划岗：输出拆解方案；涉及实现时转派给第一位编码岗同事
       const coder = this.manager.findByArchetype('coder');
-      const needCode = /(实现|开发|做一|写个|写一个|功能|程序|代码|修改|上线|排序|计算)/.test(text);
-      const plan =
-`收到需求：「${text}」
-我的拆解方案：
-1. 明确目标与验收标准；
-2. 划分模块：核心逻辑 → 数据结构 → 交互层；
-3. 排期：设计 0.5 天 / 实现 1 天 / 联调 0.5 天；
-4. 风险：本地资源与性能需提前验证。`;
-      return (needCode && coder) ? plan + `\n[TO:${coder.name}] 请按上述方案实现核心功能，并更新 main.cpp。` : plan;
+      const needCode = /(实现|开发|做一|写个|写一个|功能|程序|代码|修改|上线|排序|计算|build|implement|code|sort)/i.test(text);
+      const plan = t('reply.planner', { text });
+      return (needCode && coder) ? plan + t('reply.plannerTo', { name: coder.name }) : plan;
     }
     if (this.archetype === 'coder') {
       // 编码岗：真实执行一次“读取 + 修改”
@@ -338,25 +339,14 @@ export class Agent {
       let oldContent = '';
       try { oldContent = vfs.read(fileName); } catch { /* 新文件 */ }
       const snippet = this._offlineCodeSnippet(text, oldContent);
-      return `已读取 ${fileName}（${oldContent ? oldContent.split('\n').length + ' 行' : '新文件'}），按需求修改如下：
-\`\`\`cpp
-${snippet}
-\`\`\``;
+      const linesDesc = oldContent ? t('unit.lines', { n: oldContent.split('\n').length }) : t('agent.newFile');
+      return t('reply.coder', { name: fileName, lines: linesDesc }) + `\n\`\`\`cpp\n${snippet}\n\`\`\``;
     }
     if (this.archetype === 'artist') {
-      return `为「${text}」准备了三版创意方向：
-1. 《把重复交给 AI，把创造留给自己》——理性共鸣向；
-2. 《一群不会下班的 AI 打工人》——故事向；
-3. 《你的团队，24 小时在线》——效率向。
-建议搭配低多边形办公室视觉，强化"沉浸式"体感。`;
+      return t('reply.artist', { text });
     }
     // 通用岗
-    return `（${this.role}）已接获任务：「${text}」
-执行思路：
-1. 明确交付物与验收标准；
-2. 拆解为可并行的子任务；
-3. 按时序推进并同步风险。
-如需其他岗位协作，可在指令中 @对应同事。`;
+    return t('reply.generic', { role: this.role, text });
   }
 
   /** 离线引擎：基于关键词生成针对性代码（对原文件做真实追加修改） */
@@ -365,7 +355,7 @@ ${snippet}
     if (/排序|sort/i.test(text)) {
       fn =
 `
-// ===== 由 ${this.name} 追加：冒泡排序 =====
+// ===== ${t('code.cmtSort', { name: this.name })} =====
 void bubbleSort(std::vector<int>& a) {
     for (size_t i = 0; i + 1 < a.size(); ++i)
         for (size_t j = 0; j + 1 < a.size() - i; ++j)
@@ -375,7 +365,7 @@ void bubbleSort(std::vector<int>& a) {
     } else if (/斐波那契|fib/i.test(text)) {
       fn =
 `
-// ===== 由 ${this.name} 追加：斐波那契 =====
+// ===== ${t('code.cmtFib', { name: this.name })} =====
 long long fib(int n) {
     if (n <= 1) return n;
     long long a = 0, b = 1;
@@ -386,7 +376,7 @@ long long fib(int n) {
     } else {
       fn =
 `
-// ===== 由 ${this.name} 追加：工作室状态打印 =====
+// ===== ${t('code.cmtStatus', { name: this.name })} =====
 void printStudioStatus() {
     std::cout << "[studio] all agents online" << std::endl;
 }
@@ -464,7 +454,7 @@ export class AgentManager {
     this.agents.set(agent.id, agent);
     this._usedSlots.add(slotIdx);
 
-    this.logPanel.addSystem(`新员工「${agent.name}」（${agent.role}）入职，工位：${slot.label}。`);
+    this.logPanel.addSystem(t('agent.hired', { name: agent.name, role: agent.role, slot: pick(slot.label) }));
     this.onAgentsChanged();
     return agent;
   }
@@ -480,7 +470,7 @@ export class AgentManager {
     this._usedSlots.delete(agent.slotIndex);
     if (this.selected === agent) this.select(null);
     if (this.hovered === agent) this.hovered = null;
-    this.logPanel.addSystem(`员工「${agent.name}」已离职。`);
+    this.logPanel.addSystem(t('agent.left', { name: agent.name }));
     this.onAgentsChanged();
   }
 
@@ -529,9 +519,9 @@ export class AgentManager {
    */
   broadcast(text) {
     const total = this.agents.size;
-    if (total === 0) { this.logPanel.addSystem('当前场景内没有在岗 Agent，广播无效。'); return; }
-    this.logPanel.addMessage('你', '全体Agent', text, 'user', null);
-    this.logPanel.addSystem(`广播已发送给 ${total} 名在岗 Agent，各员工开始自主认领…`);
+    if (total === 0) { this.logPanel.addSystem(t('agent.noAgents')); return; }
+    this.logPanel.addMessage(t('you'), t('allAgents'), text, 'user', null);
+    this.logPanel.addSystem(t('agent.broadcastSent', { n: total }));
 
     // 先统计：本次广播有哪些岗位原型关键词匹配（用于同岗位去重）
     const matchedArchs = new Set();
@@ -547,17 +537,17 @@ export class AgentManager {
       const kw = CLAIM_KEYWORDS[agent.archetype];
       const isMatch = genericFallback ? agent.archetype === 'generic' : !!(kw && kw.test(text));
       if (agent.busy) {
-        if (isMatch) this.logPanel.addSystem(`「${agent.name}」岗位匹配但正在执行其他任务，本次广播不参与。`);
+        if (isMatch) this.logPanel.addSystem(t('agent.busySkip', { name: agent.name }));
         continue;
       }
       if (isMatch && !claimed.has(agent.archetype)) {
         claimed.add(agent.archetype);
-        this.logPanel.addAction(agent, `认领广播任务：「${text.length > 30 ? text.slice(0, 30) + '…' : text}」`);
+        this.logPanel.addAction(agent, t('agent.claimed', { text: text.length > 30 ? text.slice(0, 30) + '…' : text }));
         agent.respond(text, { from: 'user', mode: 'task', broadcast: true });
       } else if (isMatch && claimed.has(agent.archetype)) {
-        this.logPanel.addSystem(`「${agent.name}」同岗位已有同事认领，本人在工位待命，不重复执行。`);
+        this.logPanel.addSystem(t('agent.dupClaim', { name: agent.name }));
       } else {
-        this.logPanel.addSystem(`「${agent.name}」认为该任务不属于自身职责范围，留在工位待命。`);
+        this.logPanel.addSystem(t('agent.notMine', { name: agent.name }));
       }
     }
   }
@@ -632,6 +622,6 @@ export class AgentManager {
     const dx = p.x - px, dz = p.z - pz;
     const yaw = Math.atan2(-dx, -dz);
     this.player.teleport(px, pz, yaw);
-    this.logPanel.addSystem(`视角已定位到 ${agent.name} 的工位（${agent.slot.label}）。`);
+    this.logPanel.addSystem(t('agent.located', { name: agent.name, slot: pick(agent.slot.label) }));
   }
 }
