@@ -8,7 +8,9 @@
  *     支持 全部/思考/消息/系统 分类过滤、自动滚动、清屏。
  *  3) 指令输入：选择目标 Agent 后输入指令，Enter 私聊发送；
  *     或点击「全体广播」发送给所有在岗 Agent，由各 Agent 自主认领匹配岗位的任务。
+ * V2：文案中英双语（t()），语言切换后重渲染列表与下拉。
  */
+import { t, onLangChange } from './i18n.js';
 
 const MAX_ENTRIES = 400; // DOM 日志条数上限，防止长跑内存膨胀
 
@@ -44,8 +46,10 @@ export class LogPanel {
 
     this._bind();
     this.renderAgentCards();
-    this.addSystem('工作室已就绪。默认使用「离线AI引擎」，无需联网即可体验全部功能。');
-    this.addSystem('点击 3D 场景中的 AI 员工或左侧列表可选中；选中后即可下发任务指令。');
+    this.addSystem(t('sys.ready'));
+    this.addSystem(t('sys.selectHint'));
+    // V2：语言切换后重渲染员工卡片与指令下拉（动态文案即时刷新）
+    onLangChange(() => { this.renderAgentCards(); this.refreshTargetOptions(); });
   }
 
   _bind() {
@@ -73,7 +77,7 @@ export class LogPanel {
       const text = this.input.value.trim();
       if (!text) return;
       const target = this.targetSel.value;
-      if (!target) { this.addSystem('请先选中一个 Agent（点击 3D 员工 / 列表卡片），或使用「全体广播」。'); return; }
+      if (!target) { this.addSystem(t('log.selectFirst')); return; }
       this.input.value = '';
       this.handlers.onSend(target, text);
     };
@@ -83,7 +87,7 @@ export class LogPanel {
     // 全体广播（发送给场景内所有在岗 Agent，各自认领匹配岗位的任务）
     const fireBroadcast = () => {
       const text = this.input.value.trim();
-      if (!text) { this.addSystem('请输入广播内容后再发送。'); return; }
+      if (!text) { this.addSystem(t('log.broadcastEmpty')); return; }
       this.input.value = '';
       this.handlers.onBroadcast(text);
     };
@@ -93,11 +97,11 @@ export class LogPanel {
   _submitAdd() {
     const name = this.addName.value.trim();
     const role = this.addRole.value.trim() || 'AI员工';
-    if (!name) { this.addSystem('请输入员工名称后再添加。'); return; }
-    if (name.length > 8) { this.addSystem('名称请控制在 8 个字符以内。'); return; }
+    if (!name) { this.addSystem(t('log.nameEmpty')); return; }
+    if (name.length > 8) { this.addSystem(t('log.nameLong')); return; }
     const agent = this.handlers.onAdd(name, role);
     if (!agent) {
-      this.addSystem(`添加失败：员工数量已达上限（10人），或名称「${name}」已存在。`);
+      this.addSystem(t('log.addFail', { name }));
       return;
     }
     this.addName.value = '';
@@ -110,7 +114,7 @@ export class LogPanel {
     this.statusList.innerHTML = '';
     const empty = document.createElement('div');
     empty.className = 'agent-empty';
-    empty.textContent = '暂无员工，请在下方添加（最多10人）';
+    empty.textContent = t('log.empty');
     this.statusList.appendChild(empty);
     for (const agent of this.agents.values()) {
       const card = document.createElement('div');
@@ -122,10 +126,10 @@ export class LogPanel {
           <div class="name">${agent.name}</div>
           <div class="task" title="${agent.role}">${agent.role}</div>
         </div>
-        <span class="state-chip state-idle"><i class="dot"></i>空闲</span>
+        <span class="state-chip ${agent.stateCss}"><i class="dot"></i>${agent.stateLabel}</span>
         <div class="card-actions">
-          <button class="mini-btn" data-act="detail" title="查看详情">详情</button>
-          <button class="mini-btn danger" data-act="remove" title="移除该员工">移除</button>
+          <button class="mini-btn" data-act="detail" title="${t('log.detailTitle')}">${t('log.detailBtn')}</button>
+          <button class="mini-btn danger" data-act="remove" title="${t('log.removeTitle')}">${t('log.removeBtn')}</button>
         </div>`;
       // 点击卡片主体 = 选中
       card.addEventListener('click', (e) => {
@@ -150,8 +154,8 @@ export class LogPanel {
   _refreshAddState() {
     const full = this.agents.size >= 10;
     this.addBtn.disabled = full;
-    this.addBtn.textContent = full ? '已满10人' : '添加';
-    this.addHint.textContent = full ? '员工数量已达上限' : `当前 ${this.agents.size}/10 人`;
+    this.addBtn.querySelector('span').textContent = full ? t('log.full') : t('side.addBtn');
+    this.addHint.textContent = full ? t('log.fullHint') : t('log.count', { n: this.agents.size });
     // 同步列表头部人数统计
     const count = this.root.querySelector('#agent-count');
     if (count) count.textContent = `${this.agents.size}/10`;
@@ -183,7 +187,10 @@ export class LogPanel {
     el.className = `log-entry type-${type}`;
     el.dataset.type = type;
 
-    const typeName = { thought: '思考', message: '消息', system: '系统', state: '状态', action: '动作' }[type] || type;
+    const typeName = {
+      thought: t('log.typeThought'), message: t('log.typeMessage'), system: t('log.typeSystem'),
+      state: t('log.typeState'), action: t('log.typeAction')
+    }[type] || type;
     let head = `<span class="log-type">[${typeName}]</span>`;
     if (from && to) head += `<span class="log-agent">${from}</span><span class="log-arrow">→</span><span class="log-agent">${to}</span>`;
     else if (agentId) head += `<span class="log-agent">${this._agentName(agentId)}</span>`;
@@ -200,7 +207,7 @@ export class LogPanel {
   }
 
   addSystem(text) { this.addEntry({ type: 'system', text }); }
-  addState(agent, stateLabel) { this.addEntry({ agentId: agent.id, type: 'state', text: `进入「${stateLabel}」状态` }); }
+  addState(agent, stateLabel) { this.addEntry({ agentId: agent.id, type: 'state', text: t('log.enterState', { label: stateLabel }) }); }
   addAction(agent, text) { this.addEntry({ agentId: agent.id, type: 'action', text }); }
 
   /** Agent 间消息（互相发送的消息记录） */
@@ -265,7 +272,7 @@ export class LogPanel {
   clear() {
     this.streams.clear();
     this.stream.innerHTML = '';
-    this.addSystem('日志已清空。');
+    this.addSystem(t('log.cleared'));
   }
 
   /* ================= 指令目标联动 ================= */
@@ -275,7 +282,7 @@ export class LogPanel {
   /** 刷新指令下拉选项（增删 Agent 后调用） */
   refreshTargetOptions() {
     const cur = this.targetSel.value;
-    this.targetSel.innerHTML = '<option value="">选择员工…</option>';
+    this.targetSel.innerHTML = `<option value="">${t('log.targetPh')}</option>`;
     for (const a of this.agents.values()) {
       const opt = document.createElement('option');
       opt.value = a.id;
