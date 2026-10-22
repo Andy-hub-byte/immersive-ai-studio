@@ -24,6 +24,25 @@
 </head>
 <body>
   <div id="app">
+    <!-- ============ 首次进入：语言选择弹窗（V2 新增，选择后不再出现） ============ -->
+    <div id="lang-overlay" class="lang-overlay" hidden>
+      <div class="lang-card" role="dialog" aria-modal="true" aria-labelledby="lang-title">
+        <div class="lang-logo" aria-hidden="true">🌐</div>
+        <h2 id="lang-title" data-i18n="lang.title">选择语言 / Choose Language</h2>
+        <p class="lang-sub"><span data-i18n="lang.sub">首次进入请选择界面语言，之后可随时在右上角切换</span><br /><span data-i18n="lang.subEn">Pick your language — you can switch anytime from the top bar.</span></p>
+        <div class="lang-options">
+          <button class="lang-opt" type="button" data-lang="zh">
+            <span class="lang-opt-title" data-i18n="lang.zh">中文</span>
+            <span class="lang-opt-sub" data-i18n="lang.zhSub">简体中文界面</span>
+          </button>
+          <button class="lang-opt" type="button" data-lang="en">
+            <span class="lang-opt-title" data-i18n="lang.en">English</span>
+            <span class="lang-opt-sub" data-i18n="lang.enSub">English interface</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- ============ 中间主体区域：3D 工作室视口 ============ -->
     <main id="viewport">
       <!-- WebGL 不可用时的降级提示（老设备/无 GPU 环境；AI 功能仍可用） -->
@@ -43,20 +62,22 @@
         <div class="hud-brand">
           <span class="hud-logo" aria-hidden="true"></span>
           <div class="hud-title">
-            <strong>虚拟AI工作室</strong>
-            <small>Immersive AI Studio · V1</small>
+            <strong data-i18n="hud.brand">虚拟AI工作室</strong>
+            <small data-i18n="hud.brandSub">Immersive AI Studio · V1</small>
           </div>
         </div>
         <div class="hud-status">
           <!-- AI 连接状态指示（默认离线AI引擎，无需联网） -->
-          <span id="model-status" class="chip chip-ok" data-state="ready" title="当前 AI 连接通道">
+          <span id="model-status" class="chip chip-ok" data-state="ready" title="当前 AI 连接通道 / Current AI channel">
             <i class="dot"></i><span id="model-status-text">离线AI引擎（默认）</span>
           </span>
         </div>
         <nav id="hud-actions">
-          <button class="hud-btn" id="btn-open-chat" type="button">AI连接</button>
-          <button class="hud-btn" id="btn-open-code" type="button">C++实验室</button>
-          <button class="hud-btn" id="btn-open-files" type="button">代码文件</button>
+          <button class="hud-btn" id="btn-open-chat" type="button" data-i18n="hud.chat">AI连接</button>
+          <button class="hud-btn" id="btn-open-code" type="button" data-i18n="hud.code">C++实验室</button>
+          <button class="hud-btn" id="btn-open-files" type="button" data-i18n="hud.files">代码文件</button>
+          <!-- V2 语言切换：点击即切换到另一种语言 / one-tap language toggle -->
+          <button class="hud-btn hud-lang" id="btn-lang" type="button" data-i18n-title="hud.langTitle" title="切换语言 / Switch language">🌐 EN</button>
         </nav>
       </header>
 
@@ -66,18 +87,18 @@
 
       <!-- 触屏设备：方向按钮（平板触屏优先：按钮移动 + 拖拽转视角） -->
       <div id="touch-dpad" hidden>
-        <button class="dpad-btn dpad-up" data-dir="up" type="button" aria-label="前进">▲</button>
-        <button class="dpad-btn dpad-left" data-dir="left" type="button" aria-label="左移">◀</button>
-        <button class="dpad-btn dpad-right" data-dir="right" type="button" aria-label="右移">▶</button>
-        <button class="dpad-btn dpad-down" data-dir="down" type="button" aria-label="后退">▼</button>
+        <button class="dpad-btn dpad-up" data-dir="up" type="button" data-i18n-aria="dpad.ariaUp" aria-label="前进">▲</button>
+        <button class="dpad-btn dpad-left" data-dir="left" type="button" data-i18n-aria="dpad.ariaLeft" aria-label="左移">◀</button>
+        <button class="dpad-btn dpad-right" data-dir="right" type="button" data-i18n-aria="dpad.ariaRight" aria-label="右移">▶</button>
+        <button class="dpad-btn dpad-down" data-dir="down" type="button" data-i18n-aria="dpad.ariaDown" aria-label="后退">▼</button>
       </div>
 
       <!-- 底部操作提示 -->
       <footer id="hints">
-        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动</span>
-        <span><kbd>Shift</kbd> 加速</span>
-        <span>点击AI小人 · 查看详情</span>
-        <span>触屏：方向键移动 · 拖动转视角</span>
+        <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span data-i18n="hints.move">移动</span></span>
+        <span><kbd>Shift</kbd> <span data-i18n="hints.sprint">加速</span></span>
+        <span data-i18n="hints.clickAgent">点击AI小人 · 查看详情</span>
+        <span data-i18n="hints.touch">触屏：方向键移动 · 拖动转视角</span>
       </footer>
     </main>
 
@@ -85,34 +106,34 @@
     <aside id="side-panel">
       <div class="side-head">
         <div class="side-title">
-          <strong>工作室控制台</strong>
-          <small>Agent 状态 · 流式日志</small>
+          <strong data-i18n="side.title">工作室控制台</strong>
+          <small data-i18n="side.subtitle">Agent 状态 · 流式日志</small>
         </div>
-        <button id="btn-clear-log" class="side-icon-btn" type="button" title="清空日志">清屏</button>
+        <button id="btn-clear-log" class="side-icon-btn" type="button" data-i18n-title="side.clearTitle" title="清空日志"><span data-i18n="side.clear">清屏</span></button>
       </div>
 
       <!-- AI 员工列表（默认 3 人，可手动添加至上限 10 人） -->
       <div class="agent-list-head">
-        <span>AI 员工</span>
+        <span data-i18n="side.agents">AI 员工</span>
         <span class="agent-count" id="agent-count">0/10</span>
       </div>
       <section id="agent-status-list" class="agent-status-list"></section>
 
       <!-- 添加员工：手动点击添加，逐步扩充团队（默认只加载3个，降低初始渲染开销） -->
       <form class="agent-add" id="agent-add-form" autocomplete="off">
-        <input id="agent-add-name" type="text" maxlength="8" placeholder="新员工名称（≤8字）" aria-label="新员工名称" />
-        <input id="agent-add-role" type="text" maxlength="12" placeholder="岗位（如：测试）" aria-label="新员工岗位" />
-        <button id="agent-add-btn" class="side-icon-btn primary" type="button">添加</button>
-        <span class="agent-add-hint" id="agent-add-hint">默认 3 人，可添加至 10 人</span>
+        <input id="agent-add-name" type="text" maxlength="8" data-i18n-ph="side.addNamePh" placeholder="新员工名称（≤8字）" aria-label="新员工名称" />
+        <input id="agent-add-role" type="text" maxlength="12" data-i18n-ph="side.addRolePh" placeholder="岗位（如：测试）" aria-label="新员工岗位" />
+        <button id="agent-add-btn" class="side-icon-btn primary" type="button"><span data-i18n="side.addBtn">添加</span></button>
+        <span class="agent-add-hint" id="agent-add-hint" data-i18n="side.addHint">默认 3 人，可添加至 10 人</span>
       </form>
 
       <!-- 流式思考日志 -->
       <section class="log-section">
         <div class="log-toolbar" id="log-filters">
-          <button class="log-filter active" data-filter="all" type="button">全部</button>
-          <button class="log-filter" data-filter="thought" type="button">思考</button>
-          <button class="log-filter" data-filter="message" type="button">消息</button>
-          <button class="log-filter" data-filter="system" type="button">系统</button>
+          <button class="log-filter active" data-filter="all" type="button" data-i18n="log.filterAll">全部</button>
+          <button class="log-filter" data-filter="thought" type="button" data-i18n="log.filterThought">思考</button>
+          <button class="log-filter" data-filter="message" type="button" data-i18n="log.filterMessage">消息</button>
+          <button class="log-filter" data-filter="system" type="button" data-i18n="log.filterSystem">系统</button>
         </div>
         <div id="log-stream" class="log-stream" role="log" aria-live="polite"></div>
       </section>
@@ -121,13 +142,13 @@
       <div class="side-input">
         <div class="side-input-row">
           <select id="chat-target" aria-label="选择Agent">
-            <option value="">选择 Agent…</option>
+            <option value="" data-i18n="side.targetPh">选择 Agent…</option>
           </select>
         </div>
         <div class="side-input-row">
-          <input id="chat-input" type="text" placeholder="输入指令，Enter 发送" autocomplete="off" />
-          <button id="chat-send" class="send-btn" type="button">私聊发送</button>
-          <button id="chat-broadcast" class="broadcast-btn" type="button" title="发送给场景内所有在岗Agent，各自认领匹配岗位的任务">全体广播</button>
+          <input id="chat-input" type="text" data-i18n-ph="side.inputPh" placeholder="输入指令，Enter 发送" autocomplete="off" />
+          <button id="chat-send" class="send-btn" type="button"><span data-i18n="side.send">私聊发送</span></button>
+          <button id="chat-broadcast" class="broadcast-btn" type="button" data-i18n-title="side.broadcastTitle" title="发送给场景内所有在岗Agent，各自认领匹配岗位的任务"><span data-i18n="side.broadcast">全体广播</span></button>
         </div>
       </div>
     </aside>
@@ -137,12 +158,12 @@
       <!-- AI 连接面板：演示模式（默认）/ WebLLM 本地推理 / 高级在线API -->
       <section class="float-panel" id="panel-chat" hidden>
         <header class="float-head">
-          <strong>AI 连接设置</strong>
+          <strong data-i18n="chat.title">AI 连接设置</strong>
           <div class="float-head-actions">
             <!-- V2 长期记忆：条数显示 + 一键清除（二次点击确认） -->
             <span class="memory-chip" id="memory-chip" title="AI 长期记忆：保存在本机浏览器，重启不丢失 / Long-term memory (local only)">🧠 记忆：空</span>
-            <button class="side-icon-btn" id="btn-memory-clear" type="button">清除记忆</button>
-            <button class="side-icon-btn panel-close" type="button">关闭</button>
+            <button class="side-icon-btn" id="btn-memory-clear" type="button"><span data-i18n="ui.memClear">清除记忆</span></button>
+            <button class="side-icon-btn panel-close" type="button"><span data-i18n="chat.close">关闭</span></button>
           </div>
         </header>
 
@@ -151,16 +172,16 @@
           <button type="button" class="ai-mode-card" data-provider="offline">
             <span class="ai-mode-icon">⚡</span>
             <span class="ai-mode-body">
-              <strong>演示模式<em class="ai-mode-badge">推荐初次体验</em></strong>
-              <small>即时体验全部交互，无需下载模型</small>
+              <strong><span data-i18n="chat.modeDemo">演示模式</span><em class="ai-mode-badge" data-i18n="chat.modeDemoBadge">推荐初次体验</em></strong>
+              <small data-i18n="chat.modeDemoSub">即时体验全部交互，无需下载模型</small>
             </span>
             <span class="ai-mode-check" aria-hidden="true">✓</span>
           </button>
           <button type="button" class="ai-mode-card" data-provider="webllm">
             <span class="ai-mode-icon">🧠</span>
             <span class="ai-mode-body">
-              <strong>WebLLM 本地推理<em class="ai-mode-badge alt">真实 AI</em></strong>
-              <small>加载 Qwen3-1.7B 模型，AI 在你的设备本地运行，无费用、无密钥，首次需要下载模型文件</small>
+              <strong><span data-i18n="chat.modeWebllm">WebLLM 本地推理</span><em class="ai-mode-badge alt" data-i18n="chat.modeWebllmBadge">真实 AI</em></strong>
+              <small data-i18n="chat.modeWebllmSub">加载 Qwen3-1.7B 模型，AI 在你的设备本地运行，无费用、无密钥，首次需要下载模型文件</small>
             </span>
             <span class="ai-mode-check" aria-hidden="true">✓</span>
           </button>
@@ -168,66 +189,66 @@
 
         <!-- WebLLM 情境提示：选中本地推理模式 / 点击加载模型时显示 -->
         <p class="ai-mode-tip" id="ai-mode-tip" hidden>
-          <b>提示</b>：WebLLM 需要 WebGPU 支持（Chrome / Edge 等新版浏览器）；平板运行时轻微发热；首次下载模型建议连接 WiFi。
+          <span data-i18n="chat.tip">提示：WebLLM 需要 WebGPU 支持（Chrome / Edge 等新版浏览器）；平板运行时轻微发热；首次下载模型建议连接 WiFi。</span>
         </p>
 
         <!-- WebLLM 模型加载 -->
         <div class="model-bar" id="webllm-bar" hidden>
           <select id="model-select" aria-label="选择模型">
-            <option value="Qwen3-1.7B-q4f16_1-MLC">Qwen3-1.7B（约 1.1GB·推荐）</option>
-            <option value="Qwen3-4B-q4f16_1-MLC">Qwen3-4B（约 2.5GB·更聪明）</option>
-            <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC">Qwen2.5-1.5B（约 1GB·旧设备兼容）</option>
+            <option value="Qwen3-1.7B-q4f16_1-MLC" data-i18n="chat.model1">Qwen3-1.7B（约 1.1GB·推荐）</option>
+            <option value="Qwen3-4B-q4f16_1-MLC" data-i18n="chat.model2">Qwen3-4B（约 2.5GB·更聪明）</option>
+            <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC" data-i18n="chat.model3">Qwen2.5-1.5B（约 1GB·旧设备兼容）</option>
           </select>
-          <button class="side-icon-btn" id="btn-load-model" type="button">加载模型</button>
+          <button class="side-icon-btn" id="btn-load-model" type="button"><span data-i18n="chat.loadModel">加载模型</span></button>
           <div id="model-progress" class="model-progress" hidden><div id="model-progress-bar"></div></div>
         </div>
 
         <!-- 高级选项：在线 API（折叠收纳，不干扰主选择） -->
         <details class="ai-advanced" id="api-config">
-          <summary>高级选项：在线 API（OpenAI 兼容接口）<span class="ai-adv-current" id="api-current" hidden>· 当前模式</span></summary>
+          <summary><span data-i18n="chat.apiAdv">高级选项：在线 API（OpenAI 兼容接口）</span><span class="ai-adv-current" id="api-current" data-i18n="chat.apiCurrent" hidden>· 当前模式</span></summary>
           <div class="api-row">
             <select id="api-preset" aria-label="API预设"></select>
           </div>
           <div class="api-row">
-            <input id="api-base" type="text" placeholder="接口地址，如 https://api.deepseek.com/v1" autocomplete="off" />
+            <input id="api-base" type="text" data-i18n-ph="chat.apiBasePh" placeholder="接口地址，如 https://api.deepseek.com/v1" autocomplete="off" />
           </div>
           <div class="api-row">
-            <input id="api-key" type="password" placeholder="API Key（仅保存在本机浏览器）" autocomplete="off" />
+            <input id="api-key" type="password" data-i18n-ph="chat.apiKeyPh" placeholder="API Key（仅保存在本机浏览器）" autocomplete="off" />
           </div>
           <div class="api-row">
-            <input id="api-model" type="text" placeholder="模型名，如 deepseek-chat" autocomplete="off" />
+            <input id="api-model" type="text" data-i18n-ph="chat.apiModelPh" placeholder="模型名，如 deepseek-chat" autocomplete="off" />
           </div>
           <div class="api-row api-actions">
-            <button class="side-icon-btn" id="btn-use-api" type="button">使用在线 API</button>
-            <button class="side-icon-btn primary" id="btn-save-api" type="button">保存配置</button>
+            <button class="side-icon-btn" id="btn-use-api" type="button"><span data-i18n="chat.useApi">使用在线 API</span></button>
+            <button class="side-icon-btn primary" id="btn-save-api" type="button"><span data-i18n="chat.saveApi">保存配置</span></button>
           </div>
         </details>
 
         <!-- 测试当前 AI 通道连接（对三种通道均可用） -->
         <div class="ai-test-bar">
-          <button class="side-icon-btn" id="btn-test-api" type="button">测试连接</button>
-          <span class="ai-test-hint">点击验证当前 AI 通道能否正常响应</span>
+          <button class="side-icon-btn" id="btn-test-api" type="button"><span data-i18n="chat.test">测试连接</span></button>
+          <span class="ai-test-hint" data-i18n="chat.testHint">点击验证当前 AI 通道能否正常响应</span>
         </div>
 
         <!-- 与本地大模型直接对话（调试通道用） -->
         <div id="chat-messages" class="chat-messages"></div>
         <div class="chat-input-row">
-          <input id="chat-llm-input" type="text" placeholder="与当前 AI 通道直接对话（测试用）…" autocomplete="off" />
-          <button id="chat-llm-send" class="send-btn" type="button">发送</button>
+          <input id="chat-llm-input" type="text" data-i18n-ph="chat.llmPh" placeholder="与当前 AI 通道直接对话（测试用）…" autocomplete="off" />
+          <button id="chat-llm-send" class="send-btn" type="button"><span data-i18n="chat.send">发送</span></button>
         </div>
       </section>
 
       <!-- C++ 编程实验室（V1 壳子：离线结构检查+模拟运行；可选联网真实编译） -->
       <section class="float-panel" id="panel-code" hidden>
         <header class="float-head">
-          <strong>C++ 编程实验室</strong>
+          <strong data-i18n="code.title">C++ 编程实验室</strong>
           <div class="float-head-actions">
-            <label class="online-check" title="勾选后连接在线编译器（Wandbox/Piston）真实编译运行，需要网络">
-              <input type="checkbox" id="cpp-online" /> 联网真实编译
+            <label class="online-check" data-i18n-title="code.onlineTitle" title="勾选后连接在线编译器（Wandbox/Piston）真实编译运行，需要网络">
+              <input type="checkbox" id="cpp-online" /> <span data-i18n="code.online">联网真实编译</span>
             </label>
-            <button class="side-icon-btn" id="btn-save-cpp" type="button">保存</button>
-            <button class="side-icon-btn" id="btn-run-cpp" type="button">运行</button>
-            <button class="side-icon-btn panel-close" type="button">关闭</button>
+            <button class="side-icon-btn" id="btn-save-cpp" type="button"><span data-i18n="code.save">保存</span></button>
+            <button class="side-icon-btn" id="btn-run-cpp" type="button"><span data-i18n="code.run">运行</span></button>
+            <button class="side-icon-btn panel-close" type="button"><span data-i18n="chat.close">关闭</span></button>
           </div>
         </header>
         <div class="code-editor-wrap">
@@ -239,15 +260,15 @@
       <!-- 代码文件面板（编码Agent读取/修改的对象） -->
       <section class="float-panel" id="panel-files" hidden>
         <header class="float-head">
-          <strong>代码文件</strong>
+          <strong data-i18n="files.title">代码文件</strong>
           <div class="float-head-actions">
-            <button class="side-icon-btn panel-close" type="button">关闭</button>
+            <button class="side-icon-btn panel-close" type="button"><span data-i18n="chat.close">关闭</span></button>
           </div>
         </header>
         <div class="files-body">
           <ul id="file-tree" class="file-tree"></ul>
           <div class="file-viewer">
-            <div id="file-meta" class="file-meta">选择文件查看内容</div>
+            <div id="file-meta" class="file-meta" data-i18n="files.meta">选择文件查看内容</div>
             <pre id="file-content" class="file-content"></pre>
           </div>
         </div>
@@ -261,28 +282,28 @@
           <span class="detail-avatar" id="detail-avatar"></span>
           <div class="detail-title">
             <strong id="detail-name">Agent</strong>
-            <small id="detail-role">岗位</small>
+            <small id="detail-role" data-i18n="detail.roleLabel">岗位</small>
           </div>
-          <span class="detail-state state-chip" id="detail-state-chip">状态</span>
-          <button class="side-icon-btn" id="detail-close" type="button">关闭</button>
+          <span class="detail-state state-chip" id="detail-state-chip" data-i18n="detail.status">状态</span>
+          <button class="side-icon-btn" id="detail-close" type="button"><span data-i18n="detail.close">关闭</span></button>
         </header>
         <div class="detail-body">
           <div class="detail-block">
-            <h4>工位</h4>
+            <h4 data-i18n="detail.station">工位</h4>
             <p id="detail-slot">—</p>
           </div>
           <div class="detail-block">
-            <h4>当前任务</h4>
-            <p id="detail-task">暂无</p>
+            <h4 data-i18n="detail.task">当前任务</h4>
+            <p id="detail-task" data-i18n="detail.none">暂无</p>
           </div>
           <div class="detail-block">
-            <h4>对话记录</h4>
+            <h4 data-i18n="detail.history">对话记录</h4>
             <div id="detail-history" class="detail-history"></div>
           </div>
         </div>
         <footer class="detail-foot">
-          <button class="hud-btn" id="detail-talk" type="button">发起对话</button>
-          <button class="hud-btn" id="detail-goto" type="button">定位视角</button>
+          <button class="hud-btn" id="detail-talk" type="button"><span data-i18n="detail.talk">发起对话</span></button>
+          <button class="hud-btn" id="detail-goto" type="button"><span data-i18n="detail.goto">定位视角</span></button>
         </footer>
       </div>
     </div>
@@ -291,7 +312,7 @@
     <div id="loading-overlay">
       <div class="loading-box">
         <div class="loading-spinner"></div>
-        <p id="loading-text">正在构建低多边形工作室…</p>
+        <p id="loading-text" data-i18n="loading.text">正在构建低多边形工作室…</p>
       </div>
     </div>
   </div>
@@ -314,28 +335,30 @@
       // 情况一：file:// 协议直开（ES Module 必然被拦截）
       if (location.protocol === 'file:') {
         showNotice(
-          '<strong style="color:#fbbf24;font-size:15px">请不要直接双击打开 index.html</strong><br>' +
-          '本项目使用 ES Modules 技术，浏览器安全策略要求通过本地服务器访问。<br><br>' +
-          '<b style="color:#e8eefc">方法一</b>：在项目文件夹打开终端 / 命令行，运行<br>' +
+          '<strong style="color:#fbbf24;font-size:15px">请不要直接双击打开 index.html / Do not open index.html directly</strong><br>' +
+          '本项目使用 ES Modules 技术，浏览器安全策略要求通过本地服务器访问。<br>' +
+          'This project uses ES Modules, so browsers require it to be served over a local server.<br><br>' +
+          '<b style="color:#e8eefc">方法一 / Option 1</b>：在项目文件夹打开终端 / 命令行，运行<br>' +
           '<code style="color:#4f8ff7">python3 -m http.server 8080</code><br>' +
-          '然后浏览器访问 <code style="color:#4f8ff7">http://localhost:8080</code><br><br>' +
-          '<b style="color:#e8eefc">方法二</b>：直接打开在线演示<br>' +
+          '然后浏览器访问 / then visit <code style="color:#4f8ff7">http://localhost:8080</code><br><br>' +
+          '<b style="color:#e8eefc">方法二 / Option 2</b>：直接打开在线演示 / open the online demo<br>' +
           '<a href="https://andy-hub-byte.github.io/immersive-ai-studio/" style="color:#4f8ff7">https://andy-hub-byte.github.io/immersive-ai-studio/</a>'
         );
         return;
       }
-      // 情况二：兜底——8 秒后仍未初始化成功（服务器未启动 / 文件缺失）
+      // 情况二：兜底——12 秒后仍未初始化成功（服务器未启动 / 文件缺失 / 未选择语言）
       setTimeout(function () {
         if (!window.__studio) {
           showNotice(
-            '<strong style="color:#fbbf24;font-size:15px">3D 工作室加载失败</strong><br>' +
+            '<strong style="color:#fbbf24;font-size:15px">3D 工作室加载失败 / Studio failed to load</strong><br>' +
             '可能原因：本地服务器未启动，或项目文件不完整。<br>' +
+            'Possible causes: the local server is not running, or project files are incomplete.<br>' +
             '请在项目目录运行 <code style="color:#4f8ff7">python3 -m http.server 8080</code>，<br>' +
             '然后访问 <code style="color:#4f8ff7">http://localhost:8080</code>；<br>' +
-            '或使用在线演示：<a href="https://andy-hub-byte.github.io/immersive-ai-studio/" style="color:#4f8ff7">GitHub Pages 在线版</a>'
+            '或使用在线演示：<a href="https://andy-hub-byte.github.io/immersive-ai-studio/" style="color:#4f8ff7">GitHub Pages 在线版 / online demo</a>'
           );
         }
-      }, 8000);
+      }, 12000);
     })();
   </script>
 </body>
