@@ -11,6 +11,7 @@ import { vfs } from './vfs.js';
 import { llm } from './webllm.js';
 import { memory, memoryChipText } from './memory.js';
 import { LLM_PROVIDERS, API_PRESETS } from './config.js';
+import { t, onLangChange } from './i18n.js';
 
 /** 浮动面板容器管理：一次只打开一个面板 */
 class FloatPanelHost {
@@ -78,6 +79,8 @@ export class ChatPanel {
     this._refreshMemoryChip();
     // 记忆变化（含场景 Agent 的对话）时刷新芯片
     memory.onChange = () => this._refreshMemoryChip();
+    // V2：语言切换后刷新记忆芯片
+    onLangChange(() => this._refreshMemoryChip());
   }
 
   /** 刷新记忆芯片文案 / refresh memory chip label */
@@ -85,25 +88,31 @@ export class ChatPanel {
     if (this.memoryChip) this.memoryChip.textContent = memoryChipText();
   }
 
+  /** 记忆清除按钮文案（按钮内含 span，避免 textContent 抹掉结构） */
+  _memBtnText(s) {
+    const span = this.memoryClearBtn.querySelector('span');
+    if (span) span.textContent = s; else this.memoryClearBtn.textContent = s;
+  }
+
   /** 清除记忆：第一次点击进入确认态，3 秒内再点才真正清空 / two-click confirm */
   _onMemoryClear() {
     if (!this._memoryArmed) {
       this._memoryArmed = true;
-      this.memoryClearBtn.textContent = '确认清除？';
+      this._memBtnText(t('ui.memConfirm'));
       this.memoryClearBtn.classList.add('danger');
       this._memoryArmTimer = setTimeout(() => {
         this._memoryArmed = false;
-        this.memoryClearBtn.textContent = '清除记忆';
+        this._memBtnText(t('ui.memClear'));
         this.memoryClearBtn.classList.remove('danger');
       }, 3000);
       return;
     }
     clearTimeout(this._memoryArmTimer);
     this._memoryArmed = false;
-    this.memoryClearBtn.textContent = '清除记忆';
+    this._memBtnText(t('ui.memClear'));
     this.memoryClearBtn.classList.remove('danger');
     memory.clear();
-    this.addMsg('ai', '已清除全部长期记忆（仅清空本机浏览器保存的记录）。/ Memory cleared.');
+    this.addMsg('ai', t('ui.memCleared'));
   }
 
   _bind() {
@@ -111,7 +120,7 @@ export class ChatPanel {
     this.cards.forEach((c) => c.addEventListener('click', () => {
       llm.setProvider(c.dataset.provider);
       this._syncProviderUI();
-      this.addMsg('ai', `已切换 AI 运行模式：${llm.statusText()}`);
+      this.addMsg('ai', t('ui.switched', { status: llm.statusText() }));
     }));
     // WebLLM 加载
     this.loadBtn.addEventListener('click', () => this.loadModel());
@@ -178,14 +187,14 @@ export class ChatPanel {
     this.input.value = '';
 
     if (llm.provider === LLM_PROVIDERS.WEBLLM && !llm.ready) {
-      this.addMsg('ai', '本地模型尚未加载。请点击「加载模型」下载并启动（需要支持 WebGPU 的浏览器，如 Chrome 113+）。未加载时 Agent 会自动使用演示模式（离线引擎）。');
+      this.addMsg('ai', t('ui.modelNotLoaded'));
       return;
     }
     const body = this.addMsg('ai', '…');
     try {
       const reply = await llm.chat(
         [
-          { role: 'system', content: '你是虚拟AI工作室搭载的 AI 助手，回答简洁、友好，使用中文。' },
+          { role: 'system', content: t('ui.chatSys') },
           { role: 'user', content: text }
         ],
         (_delta, full) => { body.textContent = full; this.messages.scrollTop = this.messages.scrollHeight; }
@@ -193,16 +202,16 @@ export class ChatPanel {
       // V2 长期记忆：这一轮问答写入本机记忆，下次对话自动带上上下文
       memory.addTurn(text, reply);
     } catch (e) {
-      body.textContent = '调用失败：' + (e?.message || e) + '。请检查配置或切换回离线AI引擎。';
+      body.textContent = t('ui.chatFail', { err: e?.message || e });
     }
   }
 
   async loadModel() {
     const model = this.modelSelect.value;
     // 点进来加载模型时，先显示提示文字（WebGPU / 发热 / WiFi）
-    this.addMsg('ai', '提示：WebLLM 需要 WebGPU 支持（Chrome / Edge 等新版浏览器）；平板运行时轻微发热；首次下载模型建议连接 WiFi。');
+    this.addMsg('ai', t('ui.webllmTip'));
     if (!llm.webgpuSupported) {
-      this.addMsg('ai', '当前浏览器不支持 WebGPU，无法加载本地模型。可继续使用演示模式，或展开「高级选项」配置在线 API。');
+      this.addMsg('ai', t('ui.noWebgpu'));
       return;
     }
     this.loadBtn.disabled = true;
@@ -211,14 +220,14 @@ export class ChatPanel {
     try {
       await llm.loadWebLLM(model, (p, text) => {
         this.progressBar.style.width = Math.round(p * 100) + '%';
-        this.loadBtn.textContent = text;
+        this.loadBtn.querySelector('span').textContent = text;
       });
-      this.addMsg('ai', `模型 ${model} 已就绪，工作室 Agent 将自动改用它推理。`);
+      this.addMsg('ai', t('ui.modelReady', { id: model }));
     } catch (e) {
-      this.addMsg('ai', '加载失败：' + (e?.message || e) + '。可继续使用演示模式体验平台功能。');
+      this.addMsg('ai', t('ui.modelFail', { err: e?.message || e }));
     } finally {
       this.loadBtn.disabled = false;
-      this.loadBtn.textContent = '加载模型';
+      this.loadBtn.querySelector('span').textContent = t('chat.loadModel');
       setTimeout(() => { this.progress.hidden = true; }, 900);
     }
   }
@@ -231,8 +240,8 @@ export class ChatPanel {
       model: this.apiModel.value
     });
     this.addMsg('ai', llm.api.apiKey
-      ? `在线 API 配置已保存：${llm.api.model}，已自动切换为在线 API 模式。可点击「测试连接」验证。`
-      : '配置已保存，但 API Key 为空，请填写后再测试。');
+      ? t('ui.apiSaved', { model: llm.api.model })
+      : t('ui.apiNoKey'));
     // 配置完整即自动切换，省去用户再找入口
     if (llm.api.apiKey && llm.api.baseUrl && llm.api.model) this.switchToApi();
   }
@@ -241,19 +250,19 @@ export class ChatPanel {
   switchToApi() {
     llm.setProvider(LLM_PROVIDERS.API);
     this._syncProviderUI();
-    this.addMsg('ai', `已切换 AI 运行模式：${llm.statusText()}`);
+    this.addMsg('ai', t('ui.switched', { status: llm.statusText() }));
   }
 
   /** 测试当前 AI 通道连接 */
   async testConnection() {
     this.testApiBtn.disabled = true;
-    this.testApiBtn.textContent = '测试中…';
+    this.testApiBtn.querySelector('span').textContent = t('ui.testing');
     try {
       const r = await llm.testConnection();
-      this.addMsg('ai', `${r.ok ? '✓' : '✗'} ${r.message}（耗时 ${r.ms}ms）`);
+      this.addMsg('ai', `${r.ok ? '✓' : '✗'} ${r.message}${t('ui.testResult', { ms: r.ms })}`);
     } finally {
       this.testApiBtn.disabled = false;
-      this.testApiBtn.textContent = '测试连接';
+      this.testApiBtn.querySelector('span').textContent = t('chat.test');
     }
   }
 }
@@ -280,7 +289,7 @@ export class CodePanel {
 
   async run() {
     const code = this.editor.value;
-    this.output.textContent = this.onlineChk.checked ? '正在连接在线编译器…' : '本地检查并模拟运行中…';
+    this.output.textContent = this.onlineChk.checked ? t('ui.cppConnecting') : t('ui.cppLocal');
     this.output.className = 'cpp-output';
     // 默认离线壳子；勾选后才联网真实编译（满足单机不联网硬约束）
     const res = await runCpp(code, { online: this.onlineChk.checked });
@@ -291,7 +300,7 @@ export class CodePanel {
   save() {
     const name = this.currentFile || 'main.cpp';
     vfs.write(name, this.editor.value, 'user');
-    this.output.textContent = `已保存到虚拟文件系统：${name}`;
+    this.output.textContent = t('ui.cppSaved', { name });
     this.output.className = 'cpp-output ok';
   }
 }
@@ -320,7 +329,7 @@ export class FilesPanel {
       if (f.updatedBy !== 'system' && f.updatedBy !== 'user') {
         const b = document.createElement('span');
         b.className = 'badge';
-        b.title = `${f.updatedBy} 修改过`;
+        b.title = t('ui.fileBadge', { name: f.updatedBy });
         li.appendChild(b);
       }
       if (this.current === f.name) li.classList.add('active');
@@ -337,9 +346,14 @@ export class FilesPanel {
     if (!f) return;
     if (!silent) this.render();
     const lines = f.content.split('\n').length;
-    const t = new Date(f.updatedAt);
-    this.meta.textContent =
-      `${f.name} · ${lines} 行 · 最近修改：${f.updatedBy} · ${t.toLocaleString('zh-CN', { hour12: false })}`;
+    const t_ = new Date(f.updatedAt);
+    const locale = document.documentElement.lang === 'en' ? 'en-US' : 'zh-CN';
+    this.meta.textContent = t('ui.fileMeta', {
+      name: f.name,
+      lines: t('unit.lines', { n: lines }),
+      by: f.updatedBy,
+      time: t_.toLocaleString(locale, { hour12: false })
+    });
     this.content.textContent = f.content;
   }
 }
