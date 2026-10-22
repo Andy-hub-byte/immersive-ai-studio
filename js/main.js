@@ -10,11 +10,15 @@
  *   - V1 新增：Agent 四状态（空闲/思考/执行任务/对话）、右侧流式日志面板、
  *     Agent 详情弹窗（名称/岗位/状态/当前任务/历史对话）
  *   - V2 新增：AI 长期记忆（见 memory.js）、PWA（manifest + Service Worker）、
- *     WebGL 降级（3D 不可用时 AI 对话/记忆/C++实验室仍可用）
+ *     WebGL 降级（3D 不可用时 AI 对话/记忆/C++实验室仍可用）、
+ *     中英双语 + 首次语言选择弹窗（见 i18n.js）
  *
  * 性能约束（重要）：
  *   启动时默认只创建 3 个 Agent（规划/编码/创作），其余 7 个槽位空置，
  *   由用户在右侧面板手动点击"添加"逐步增加（上限 10），降低初始渲染开销。
+ *
+ * 启动流程：initLangPicker 先处理语言（首访弹选择，已选过直接进入），
+ *           确定语言后才执行 boot()，保证所有动态文案以所选语言渲染。
  */
 import { StudioScene } from './scene.js';
 import { PlayerController } from './player.js';
@@ -24,6 +28,10 @@ import { AgentManager } from './agents.js';
 import { llm } from './webllm.js';
 import { memory, withMemory } from './memory.js';
 import { ChatPanel, CodePanel, FilesPanel, FloatPanelHost } from './uiPanels.js';
+import { t, getLang, setLang, initLangPicker, onLangChange } from './i18n.js';
+
+/* ================= 应用启动（语言确定后执行） ================= */
+function boot() {
 
 /* ================= 1. 场景与玩家（基础功能，带 WebGL 降级） ================= */
 const canvasWrap = document.getElementById('canvas-wrap');
@@ -91,7 +99,7 @@ detailPanel.on({
     agentManager?.select(agent);
     logPanel.selectTarget(agent.id);
     logPanel.input.focus();
-    agent.avatar.showBubble('我在，请说。', 2600);
+    agent.avatar.showBubble(t('bubble.here'), 2600);
   },
   // 定位视角：传送玩家到该 Agent 工位前
   locate: (agent) => agentManager?.locate(agent)
@@ -124,10 +132,10 @@ const INITIAL_AGENTS = [
 ];
 if (glOk && agentManager) {
   for (const cfg of INITIAL_AGENTS) agentManager.addAgent(cfg);
-  logPanel.addSystem(`已加载 ${INITIAL_AGENTS.length} 名初始员工（默认数量，节省渲染开销）。`);
-  logPanel.addSystem('在下方「添加员工」中输入名称与岗位，可逐步扩充团队（上限 10 人）。');
+  logPanel.addSystem(t('sys.initialAgents', { n: INITIAL_AGENTS.length }));
+  logPanel.addSystem(t('sys.addHint'));
 } else {
-  logPanel.addSystem('当前设备不支持 WebGL，3D 场景与 AI 员工团队暂不可用；AI 助手对话、长期记忆、C++ 实验室仍可正常使用。');
+  logPanel.addSystem(t('sys.noWebgl'));
 }
 logPanel.refreshTargetOptions(); // 刷新指令下拉选项
 
@@ -145,6 +153,11 @@ bindHud('btn-open-chat', 'chat');
 bindHud('btn-open-code', 'code');
 bindHud('btn-open-files', 'files');
 
+// V2 语言切换按钮：一键中英互换（按钮标签显示目标语言，由 applyStatic 维护）
+document.getElementById('btn-lang').addEventListener('click', () => {
+  setLang(getLang() === 'zh' ? 'en' : 'zh');
+});
+
 /* ================= 6. AI 连接状态芯片 ================= */
 // 默认通道为「离线AI引擎」（无需联网即可用），芯片实时反映当前通道
 const modelChip = document.getElementById('model-status');
@@ -157,6 +170,11 @@ function refreshModelChip() {
 }
 llm.onStatus = refreshModelChip;
 refreshModelChip();
+// V2：语言切换后刷新状态芯片与详情弹窗（动态文案即时更新）
+onLangChange(() => {
+  refreshModelChip();
+  if (detailPanel.isOpen) detailPanel.refresh();
+});
 
 /* ================= 7. 3D 交互：点击 / 悬停 Agent（仅 3D 可用时） ================= */
 if (glOk && player && agentManager) {
@@ -261,8 +279,8 @@ if (glOk) {
   }
 
   // 首帧渲染后隐藏加载遮罩
-  requestAnimationFrame((t) => {
-    frame(t);
+  requestAnimationFrame((t_) => {
+    frame(t_);
     document.getElementById('loading-overlay').classList.add('done');
     setTimeout(() => document.getElementById('loading-overlay').remove(), 500);
   });
@@ -275,6 +293,8 @@ if (glOk) {
 // 调试钩子：便于自动化测试与问题定位（不影响正常功能）
 window.__studio = { studio, player, agentManager, logPanel, detailPanel, memory, llm, withMemory };
 
+} /* end boot */
+
 // ============================================================
 // PWA：注册 Service Worker（仅 http/https 环境；file:// 本地双击打开时跳过）
 // 作用：弱网/断网时可继续打开页面；配合 manifest 可"添加到主屏幕"。
@@ -284,3 +304,9 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('./sw.js').catch(() => { /* 注册失败不影响功能 */ });
   });
 }
+
+// ============================================================
+// V2 启动门控：先确定语言（首访弹选择框），再启动应用
+// 已选择过 → 直接 boot；首访 → 显示 #lang-overlay，用户点击后 boot
+// ============================================================
+initLangPicker(boot);
