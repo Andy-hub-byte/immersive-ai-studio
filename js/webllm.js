@@ -8,6 +8,7 @@
  */
 import { LLM_PROVIDERS } from './config.js';
 import { withMemory } from './memory.js';
+import { t } from './i18n.js';
 
 /** WebLLM CDN 地址（依次尝试，任一可用即可） */
 const WEBLLM_URLS = [
@@ -55,9 +56,9 @@ export class LLMService {
 
   /** 人类可读的当前通道状态 */
   statusText() {
-    if (this.provider === LLM_PROVIDERS.WEBLLM) return this.engine ? `本地模型就绪（${this.modelId}）` : '本地模型未加载';
-    if (this.provider === LLM_PROVIDERS.API) return this.api.apiKey ? `在线API：${this.api.model}` : '在线API未配置';
-    return '演示模式（离线规则引擎）';
+    if (this.provider === LLM_PROVIDERS.WEBLLM) return this.engine ? t('llm.statusLocal', { id: this.modelId }) : t('llm.statusNoLocal');
+    if (this.provider === LLM_PROVIDERS.API) return this.api.apiKey ? t('llm.statusApi', { model: this.api.model }) : t('llm.statusNoApi');
+    return t('llm.statusDemo');
   }
 
   /** 切换通道 */
@@ -77,21 +78,21 @@ export class LLMService {
   /* ---------- 通道二：WebLLM 本地大模型 ---------- */
   async loadWebLLM(modelId, onProgress = () => {}) {
     if (this.engine && this.modelId === modelId) return;
-    if (this.loading) throw new Error('模型正在加载中，请稍候…');
+    if (this.loading) throw new Error(t('llm.loading'));
     if (!this.webgpuSupported) {
-      throw new Error('当前浏览器不支持 WebGPU。请使用 Chrome 113+ / Edge 最新版；或改用在线API / 离线引擎。');
+      throw new Error(t('llm.noWebgpu'));
     }
     this.loading = true;
     try {
-      onProgress(0.02, '正在获取推理引擎…');
+      onProgress(0.02, t('llm.gettingEngine'));
       let webllm = null, lastErr = null;
       for (const url of WEBLLM_URLS) {
         try { webllm = await import(/* @vite-ignore */ url); break; } catch (e) { lastErr = e; }
       }
-      if (!webllm) throw lastErr || new Error('无法加载 WebLLM 引擎（CDN 不可达）');
-      onProgress(0.08, '正在初始化引擎…');
+      if (!webllm) throw lastErr || new Error(t('llm.engineFail'));
+      onProgress(0.08, t('llm.initEngine'));
       this.engine = await webllm.CreateMLCEngine(modelId, {
-        initProgressCallback: (p) => onProgress(Math.max(0.08, p), `下载/初始化模型 ${Math.round(p * 100)}%`)
+        initProgressCallback: (p) => onProgress(Math.max(0.08, p), t('llm.downloading', { p: Math.round(p * 100) }))
       });
       this.modelId = modelId;
       this._saveSettings();
@@ -105,15 +106,15 @@ export class LLMService {
   /* ---------- 通道三：在线 API（OpenAI 兼容，流式） ---------- */
   async chatViaApi(messages, onChunk) {
     const { baseUrl, apiKey, model } = this.api;
-    if (!baseUrl || !apiKey || !model) throw new Error('在线API未配置完整（需要地址、密钥、模型名）');
+    if (!baseUrl || !apiKey || !model) throw new Error(t('llm.apiIncomplete'));
     const resp = await fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({ model, messages, stream: true, temperature: 0.7 })
     });
     if (!resp.ok) {
-      const t = await resp.text().catch(() => '');
-      throw new Error(`API 返回 HTTP ${resp.status}：${t.slice(0, 160)}`);
+      const txt = await resp.text().catch(() => '');
+      throw new Error(t('llm.apiHttp', { status: resp.status, text: txt.slice(0, 160) }));
     }
     // 解析 SSE 流
     const reader = resp.body.getReader();
@@ -169,7 +170,7 @@ export class LLMService {
       throw new Error(`${e?.message || e}（已可切换回离线引擎继续使用）`);
     }
     // 离线引擎
-    if (!this.demoResponder) return '（离线引擎未就绪）';
+    if (!this.demoResponder) return t('llm.offlineNotReady');
     const text = this.demoResponder();
     return streamText(text, onChunk);
   }
@@ -181,20 +182,20 @@ export class LLMService {
    */
   async testConnection() {
     const t0 = performance.now();
-    const probe = [{ role: 'user', content: '请回复：连接成功' }];
+    const probe = [{ role: 'user', content: t('llm.probe') }];
     try {
       if (this.provider === LLM_PROVIDERS.API) {
         const r = await this.chatViaApi(probe, () => {});
-        return { ok: true, message: `在线API连接成功，模型回复：${r.slice(0, 40)}`, ms: Math.round(performance.now() - t0) };
+        return { ok: true, message: t('llm.testApiOk', { r: r.slice(0, 40) }), ms: Math.round(performance.now() - t0) };
       }
       if (this.provider === LLM_PROVIDERS.WEBLLM) {
-        if (!this.engine) return { ok: false, message: '本地模型尚未加载，请先点击"加载模型"', ms: 0 };
+        if (!this.engine) return { ok: false, message: t('llm.testLocalNoLoad'), ms: 0 };
         const r = await this.chat(probe, () => {}, { useMemory: false }); // 探针不注入/不污染记忆
-        return { ok: true, message: `本地模型连接成功，回复：${r.slice(0, 40)}`, ms: Math.round(performance.now() - t0) };
+        return { ok: true, message: t('llm.testLocalOk', { r: r.slice(0, 40) }), ms: Math.round(performance.now() - t0) };
       }
       // 离线引擎
       const r = this.demoResponder ? this.demoResponder() : '';
-      return { ok: true, message: `离线引擎工作正常（内置规则引擎，无需联网）`, ms: Math.round(performance.now() - t0) };
+      return { ok: true, message: t('llm.testOfflineOk'), ms: Math.round(performance.now() - t0) };
     } catch (e) {
       return { ok: false, message: e?.message || String(e), ms: Math.round(performance.now() - t0) };
     }
