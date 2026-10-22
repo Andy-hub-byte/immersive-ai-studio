@@ -18,3 +18,6 @@ node_modules/
 smolagent-lora-lab/
 smolagent-lora-lab-selfuse/
 *.zip
+
+# IDE 配置
+.cloudstudio/
